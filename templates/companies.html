@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}公司管理 - 水质采样管理系统{% endblock %}
+{% block content %}
+<div class="flex-between mb-10">
+    <h2 style="font-size:18px;">公司管理</h2>
+    <div>
+        <a class="btn btn-outline mr-8" href="/api/companies/import/template">下载导入模板</a>
+        <button class="btn btn-info mr-8" onclick="openModal('importModal')">Excel导入</button>
+        <button class="btn btn-primary" onclick="openAdd()">+ 新增公司</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>公司名称</th><th>所属集团</th><th>地址</th><th>联系人</th><th>联系电话</th><th style="width:120px;">操作</th></tr></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="formModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modalTitle">新增公司</h3>
+            <button class="modal-close" onclick="closeModal('formModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editId">
+            <div class="form-group"><label>公司名称 *</label><input class="form-control" id="f_name"></div>
+            <div class="form-group"><label>所属集团</label><input class="form-control" id="f_group_name"></div>
+            <div class="form-group"><label>地址</label><input class="form-control" id="f_address"></div>
+            <div class="form-row">
+                <div class="form-group"><label>联系人</label><input class="form-control" id="f_contact_person"></div>
+                <div class="form-group"><label>联系电话</label><input class="form-control" id="f_contact_phone"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('formModal')">取消</button>
+            <button class="btn btn-primary" onclick="saveCompany()">保存</button>
+        </div>
+    </div>
+</div>
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Excel导入公司</h3>
+            <button class="modal-close" onclick="closeModal('importModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom:12px;color:#666;">请先<a href="/api/companies/import/template" style="color:#1a237e;text-decoration:underline;">下载模板</a>，按格式填写后上传。列：公司名称、所属集团、地址、联系人、联系电话。已存在的公司会自动跳过。</p>
+            <div class="form-group"><label>选择Excel文件 *</label><input type="file" id="importFile" accept=".xlsx,.xls" class="form-control"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('importModal')">取消</button>
+            <button class="btn btn-primary" onclick="doImport()">导入</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function loadList() {
+    api('/api/companies').then(function(list) {
+        var tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>'; return; }
+        list.forEach(function(c) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + esc(c.name) + '</td><td>' + esc(c.group_name) + '</td><td>' + esc(c.address) + '</td>' +
+                '<td>' + esc(c.contact_person) + '</td><td>' + esc(c.contact_phone) + '</td>' +
+                '<td><button class="btn btn-sm btn-info mr-8" onclick="openEdit(' + c.id + ')">编辑</button>' +
+                '<button class="btn btn-sm btn-danger" onclick="delCompany(' + c.id + ')">删除</button></td>';
+            tbody.appendChild(tr);
+        });
+    }).catch(function(e) { showToast(e.detail || '加载失败', 'error'); });
+}
+
+function openAdd() {
+    document.getElementById('modalTitle').textContent = '新增公司';
+    document.getElementById('editId').value = '';
+    document.getElementById('f_name').value = '';
+    document.getElementById('f_group_name').value = '';
+    document.getElementById('f_address').value = '';
+    document.getElementById('f_contact_person').value = '';
+    document.getElementById('f_contact_phone').value = '';
+    openModal('formModal');
+}
+
+function openEdit(id) {
+    api('/api/companies/' + id).then(function(c) {
+        document.getElementById('modalTitle').textContent = '编辑公司';
+        document.getElementById('editId').value = c.id;
+        document.getElementById('f_name').value = c.name || '';
+        document.getElementById('f_group_name').value = c.group_name || '';
+        document.getElementById('f_address').value = c.address || '';
+        document.getElementById('f_contact_person').value = c.contact_person || '';
+        document.getElementById('f_contact_phone').value = c.contact_phone || '';
+        openModal('formModal');
+    });
+}
+
+function saveCompany() {
+    var name = document.getElementById('f_name').value.trim();
+    if (!name) { showToast('请输入公司名称', 'error'); return; }
+    var body = {
+        name: name,
+        group_name: document.getElementById('f_group_name').value.trim() || null,
+        address: document.getElementById('f_address').value.trim() || null,
+        contact_person: document.getElementById('f_contact_person').value.trim() || null,
+        contact_phone: document.getElementById('f_contact_phone').value.trim() || null
+    };
+    var eid = document.getElementById('editId').value;
+    var url = eid ? '/api/companies/' + eid : '/api/companies';
+    var method = eid ? 'PUT' : 'POST';
+    apiJSON(url, method, body).then(function() {
+        closeModal('formModal');
+        showToast(eid ? '更新成功' : '创建成功');
+        loadList();
+    }).catch(function(e) { showToast(e.detail || '保存失败', 'error'); });
+}
+
+function delCompany(id) {
+    if (!confirmDelete()) return;
+    api('/api/companies/' + id, {method:'DELETE'}).then(function() {
+        showToast('删除成功');
+        loadList();
+    }).catch(function(e) { showToast(e.detail || '删除失败', 'error'); });
+}
+
+function doImport() {
+    var fileInput = document.getElementById('importFile');
+    if (!fileInput.files.length) { showToast('请选择文件', 'error'); return; }
+    var fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    fetch('/api/companies/import/excel', {method:'POST', body:fd})
+        .then(function(r) { return r.json().then(function(d) { if (!r.ok) throw d; return d; }); })
+        .then(function(d) { closeModal('importModal'); showToast(d.detail); fileInput.value=''; loadList(); })
+        .catch(function(e) { showToast(e.detail || '导入失败', 'error'); });
+}
+
+loadList();
+</script>
+{% endblock %}

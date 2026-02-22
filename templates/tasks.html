@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}采样计划 - 水质采样管理系统{% endblock %}
+{% block content %}
+<div class="flex-between mb-10">
+    <h2 style="font-size:18px;">采样计划</h2>
+    <button class="btn btn-primary" onclick="openAddTask()">+ 新增临时任务</button>
+</div>
+
+<div class="card">
+    <div class="filter-bar">
+        <div class="form-group"><label>年度</label>
+            <select id="fYear" class="form-control" onchange="loadTasks()">
+                <option value="2024">2024</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
+            </select>
+        </div>
+        <div class="form-group"><label>月份</label>
+            <select id="fMonth" class="form-control" onchange="loadTasks()">
+                <option value="">全部</option>
+                <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option><option value="4">4月</option>
+                <option value="5">5月</option><option value="6">6月</option><option value="7">7月</option><option value="8">8月</option>
+                <option value="9">9月</option><option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+            </select>
+        </div>
+        <div class="form-group"><label>公司</label><select id="fCompany" class="form-control" onchange="loadTasks()"><option value="">全部</option></select></div>
+        <div class="form-group"><label>状态</label>
+            <select id="fStatus" class="form-control" onchange="loadTasks()">
+                <option value="">全部</option><option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option>
+            </select>
+        </div>
+        <div class="form-group"><label>来源</label>
+            <select id="fSource" class="form-control" onchange="loadTasks()">
+                <option value="">全部</option><option value="contract">合同</option><option value="manual">手动</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Batch actions -->
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+        <label style="font-size:13px;color:#555;">批量操作:</label>
+        <select id="batchStatus" class="form-control" style="width:130px;">
+            <option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option>
+        </select>
+        <button class="btn btn-sm btn-warning" onclick="batchUpdate()">批量更新</button>
+        <span id="selectedCount" style="font-size:12px;color:#888;margin-left:4px;">已选 0 项</span>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th><input type="checkbox" id="checkAll" onchange="toggleAll()"></th>
+                <th>月份</th><th>水厂</th><th>样品类别</th><th>检测项目</th><th>计划日期</th><th>状态</th><th>执行人</th><th style="width:100px;">操作</th>
+            </tr></thead>
+            <tbody id="taskBody"></tbody>
+        </table>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- Add Task Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal" style="width:600px;">
+        <div class="modal-header"><h3>新增临时任务</h3><button class="modal-close" onclick="closeModal('addModal')">&times;</button></div>
+        <div class="modal-body">
+            <div class="form-row">
+                <div class="form-group"><label>公司 *</label><select class="form-control" id="a_company_id"></select></div>
+                <div class="form-group"><label>水厂名称</label><input class="form-control" id="a_water_plant_name"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>样品类别</label><input class="form-control" id="a_sample_type"></div>
+                <div class="form-group"><label>检测项目</label><input class="form-control" id="a_detection_project"></div>
+            </div>
+            <div class="form-group"><label>检测标准</label><input class="form-control" id="a_detection_standard"></div>
+            <div class="form-row">
+                <div class="form-group"><label>年度</label><input class="form-control" type="number" id="a_year" value="2026"></div>
+                <div class="form-group"><label>月份</label><input class="form-control" type="number" id="a_month" min="1" max="12"></div>
+                <div class="form-group"><label>计划日期</label><input class="form-control" type="date" id="a_planned_date"></div>
+            </div>
+            <div class="form-group"><label>备注</label><input class="form-control" id="a_notes"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('addModal')">取消</button>
+            <button class="btn btn-primary" onclick="saveNewTask()">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Task Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal" style="width:520px;">
+        <div class="modal-header"><h3>编辑任务</h3><button class="modal-close" onclick="closeModal('editModal')">&times;</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="e_id">
+            <div class="form-row">
+                <div class="form-group"><label>状态</label>
+                    <select class="form-control" id="e_status">
+                        <option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>执行人</label><input class="form-control" id="e_executor"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>计划日期</label><input class="form-control" type="date" id="e_planned_date"></div>
+                <div class="form-group"><label>实际日期</label><input class="form-control" type="date" id="e_actual_date"></div>
+            </div>
+            <div class="form-group"><label>备注</label><input class="form-control" id="e_notes"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('editModal')">取消</button>
+            <button class="btn btn-primary" onclick="saveEdit()">保存</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var companies = [];
+var allTasks = [];
+var currentPage = 1;
+var pageSize = 20;
+var selectedIds = {};
+
+function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function statusBadge(s) {
+    var cls = 'badge-gray';
+    if (s === '已采样') cls = 'badge-orange';
+    else if (s === '已送检') cls = 'badge-blue';
+    else if (s === '已出报告') cls = 'badge-green';
+    return '<span class="badge ' + cls + '">' + esc(s) + '</span>';
+}
+
+function loadCompanies(cb) {
+    api('/api/companies').then(function(list) {
+        companies = list;
+        var selIds = ['fCompany', 'a_company_id'];
+        selIds.forEach(function(sid) {
+            var sel = document.getElementById(sid);
+            if (sid === 'fCompany') {
+                sel.innerHTML = '<option value="">全部</option>';
+            } else {
+                sel.innerHTML = '<option value="">请选择</option>';
+            }
+            list.forEach(function(c) {
+                sel.innerHTML += '<option value="' + c.id + '">' + esc(c.name) + '</option>';
+            });
+        });
+        if (cb) cb();
+    });
+}
+
+function loadTasks() {
+    var params = [];
+    var yr = document.getElementById('fYear').value;
+    if (yr) params.push('year=' + yr);
+    var mo = document.getElementById('fMonth').value;
+    if (mo) params.push('month=' + mo);
+    var cid = document.getElementById('fCompany').value;
+    if (cid) params.push('company_id=' + cid);
+    var st = document.getElementById('fStatus').value;
+    if (st) params.push('status=' + encodeURIComponent(st));
+    var src = document.getElementById('fSource').value;
+    if (src) params.push('source=' + src);
+
+    api('/api/tasks' + (params.length ? '?' + params.join('&') : '')).then(function(list) {
+        allTasks = list;
+        currentPage = 1;
+        selectedIds = {};
+        updateSelectedCount();
+        renderPage();
+    }).catch(function(e) { showToast(e.detail || '加载失败', 'error'); });
+}
+
+function renderPage() {
+    var start = (currentPage - 1) * pageSize;
+    var page = allTasks.slice(start, start + pageSize);
+    var totalPages = Math.ceil(allTasks.length / pageSize) || 1;
+
+    var tbody = document.getElementById('taskBody');
+    tbody.innerHTML = '';
+    if (!page.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>';
+    } else {
+        page.forEach(function(t) {
+            var tr = document.createElement('tr');
+            var checked = selectedIds[t.id] ? ' checked' : '';
+            tr.innerHTML =
+                '<td><input type="checkbox" data-id="' + t.id + '"' + checked + ' onchange="toggleCheck(this)"></td>' +
+                '<td>' + (t.month || '-') + '月</td>' +
+                '<td>' + esc(t.water_plant_name) + '</td>' +
+                '<td>' + esc(t.sample_type) + '</td>' +
+                '<td>' + esc(t.detection_project) + '</td>' +
+                '<td>' + (t.planned_date || '-') + '</td>' +
+                '<td>' + statusBadge(t.status) + '</td>' +
+                '<td>' + esc(t.executor) + '</td>' +
+                '<td>' +
+                '<button class="btn btn-sm btn-info mr-8" onclick="openEdit(' + t.id + ')">编辑</button>' +
+                '<button class="btn btn-sm btn-danger" onclick="delTask(' + t.id + ')">删除</button>' +
+                '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Pagination
+    var pag = document.getElementById('pagination');
+    pag.innerHTML = '';
+    if (totalPages > 1) {
+        var prevBtn = '<button class="btn btn-sm btn-outline"' + (currentPage <= 1 ? ' disabled' : '') + ' onclick="goPage(' + (currentPage-1) + ')">上一页</button>';
+        var nextBtn = '<button class="btn btn-sm btn-outline"' + (currentPage >= totalPages ? ' disabled' : '') + ' onclick="goPage(' + (currentPage+1) + ')">下一页</button>';
+        pag.innerHTML = prevBtn + '<span class="page-info">第 ' + currentPage + ' / ' + totalPages + ' 页，共 ' + allTasks.length + ' 条</span>' + nextBtn;
+    } else if (allTasks.length > 0) {
+        pag.innerHTML = '<span class="page-info">共 ' + allTasks.length + ' 条</span>';
+    }
+
+    // Update checkAll
+    document.getElementById('checkAll').checked = false;
+}
+
+function goPage(p) {
+    var totalPages = Math.ceil(allTasks.length / pageSize) || 1;
+    if (p < 1 || p > totalPages) return;
+    currentPage = p;
+    renderPage();
+}
+
+function toggleCheck(el) {
+    var id = parseInt(el.dataset.id);
+    if (el.checked) selectedIds[id] = true;
+    else delete selectedIds[id];
+    updateSelectedCount();
+}
+
+function toggleAll() {
+    var checked = document.getElementById('checkAll').checked;
+    var start = (currentPage - 1) * pageSize;
+    var page = allTasks.slice(start, start + pageSize);
+    page.forEach(function(t) {
+        if (checked) selectedIds[t.id] = true;
+        else delete selectedIds[t.id];
+    });
+    var boxes = document.querySelectorAll('#taskBody input[type="checkbox"]');
+    boxes.forEach(function(b) { b.checked = checked; });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    var count = Object.keys(selectedIds).length;
+    document.getElementById('selectedCount').textContent = '已选 ' + count + ' 项';
+}
+
+function batchUpdate() {
+    var ids = Object.keys(selectedIds).map(Number);
+    if (!ids.length) { showToast('请先选择任务', 'error'); return; }
+    var status = document.getElementById('batchStatus').value;
+    apiJSON('/api/tasks/batch-status', 'PATCH', { task_ids: ids, status: status }).then(function() {
+        showToast('批量更新成功');
+        selectedIds = {};
+        updateSelectedCount();
+        loadTasks();
+    }).catch(function(e) { showToast(e.detail || '更新失败', 'error'); });
+}
+
+/* ===== Add Task ===== */
+function openAddTask() {
+    document.getElementById('a_company_id').value = '';
+    document.getElementById('a_water_plant_name').value = '';
+    document.getElementById('a_sample_type').value = '';
+    document.getElementById('a_detection_project').value = '';
+    document.getElementById('a_detection_standard').value = '';
+    document.getElementById('a_year').value = document.getElementById('fYear').value || '2026';
+    document.getElementById('a_month').value = '';
+    document.getElementById('a_planned_date').value = '';
+    document.getElementById('a_notes').value = '';
+    openModal('addModal');
+}
+
+function saveNewTask() {
+    var cid = document.getElementById('a_company_id').value;
+    if (!cid) { showToast('请选择公司', 'error'); return; }
+    var body = {
+        company_id: parseInt(cid),
+        water_plant_name: document.getElementById('a_water_plant_name').value.trim() || null,
+        sample_type: document.getElementById('a_sample_type').value.trim() || null,
+        detection_project: document.getElementById('a_detection_project').value.trim() || null,
+        detection_standard: document.getElementById('a_detection_standard').value.trim() || null,
+        year: parseInt(document.getElementById('a_year').value) || null,
+        month: parseInt(document.getElementById('a_month').value) || null,
+        planned_date: document.getElementById('a_planned_date').value || null,
+        notes: document.getElementById('a_notes').value.trim() || null,
+        status: '待采样'
+    };
+    apiJSON('/api/tasks', 'POST', body).then(function() {
+        closeModal('addModal');
+        showToast('任务创建成功');
+        loadTasks();
+    }).catch(function(e) { showToast(e.detail || '创建失败', 'error'); });
+}
+
+/* ===== Edit Task ===== */
+function openEdit(id) {
+    var task = null;
+    for (var i = 0; i < allTasks.length; i++) { if (allTasks[i].id === id) { task = allTasks[i]; break; } }
+    if (!task) return;
+    document.getElementById('e_id').value = task.id;
+    document.getElementById('e_status').value = task.status || '待采样';
+    document.getElementById('e_executor').value = task.executor || '';
+    document.getElementById('e_planned_date').value = task.planned_date || '';
+    document.getElementById('e_actual_date').value = task.actual_date || '';
+    document.getElementById('e_notes').value = task.notes || '';
+    openModal('editModal');
+}
+
+function saveEdit() {
+    var id = document.getElementById('e_id').value;
+    var body = {
+        status: document.getElementById('e_status').value,
+        executor: document.getElementById('e_executor').value.trim() || null,
+        planned_date: document.getElementById('e_planned_date').value || null,
+        actual_date: document.getElementById('e_actual_date').value || null,
+        notes: document.getElementById('e_notes').value.trim() || null
+    };
+    apiJSON('/api/tasks/' + id, 'PUT', body).then(function() {
+        closeModal('editModal');
+        showToast('更新成功');
+        loadTasks();
+    }).catch(function(e) { showToast(e.detail || '更新失败', 'error'); });
+}
+
+function delTask(id) {
+    if (!confirmDelete()) return;
+    api('/api/tasks/' + id, {method:'DELETE'}).then(function() {
+        showToast('删除成功');
+        loadTasks();
+    }).catch(function(e) { showToast(e.detail || '删除失败', 'error'); });
+}
+
+loadCompanies(function() { loadTasks(); });
+</script>
+{% endblock %}

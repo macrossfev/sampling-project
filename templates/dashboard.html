@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}看板 - 水质采样管理系统{% endblock %}
+{% block content %}
+<div class="flex-between mb-10">
+    <h2 style="font-size:18px;">数据看板</h2>
+    <div class="form-group" style="margin-bottom:0;">
+        <select id="yearSelect" class="form-control" style="width:120px;" onchange="loadDashboard()">
+            <option value="2024">2024年</option>
+            <option value="2025">2025年</option>
+            <option value="2026" selected>2026年</option>
+            <option value="2027">2027年</option>
+        </select>
+    </div>
+</div>
+
+<div class="summary-row" id="summaryCards">
+    <div class="summary-card" style="background:linear-gradient(135deg,#2980b9,#3498db);">
+        <div class="num" id="totalNum">0</div>
+        <div class="label">总任务</div>
+    </div>
+    <div class="summary-card" style="background:linear-gradient(135deg,#27ae60,#2ecc71);">
+        <div class="num" id="completedNum">0</div>
+        <div class="label">已完成</div>
+    </div>
+    <div class="summary-card" style="background:linear-gradient(135deg,#e67e22,#f39c12);">
+        <div class="num" id="pendingNum">0</div>
+        <div class="label">待采样</div>
+    </div>
+    <div class="summary-card" style="background:linear-gradient(135deg,#c0392b,#e74c3c);">
+        <div class="num" id="overdueNum">0</div>
+        <div class="label">逾期</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="flex-between">
+        <div class="card-title" style="border:none;margin:0;padding:0;">总体进度</div>
+        <span id="progressText" style="font-size:13px;color:#666;">0%</span>
+    </div>
+    <div class="progress" style="height:16px;margin-top:10px;">
+        <div class="progress-bar" id="progressBar" style="background:#27ae60;width:0%;"></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">各公司进度</div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>公司名称</th><th>总任务</th><th>已完成</th><th style="width:30%;">进度</th><th>完成率</th></tr></thead>
+            <tbody id="companyBody"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loadDashboard() {
+    var year = document.getElementById('yearSelect').value;
+    api('/api/dashboard/summary?year=' + year).then(function(d) {
+        document.getElementById('totalNum').textContent = d.total_tasks;
+        document.getElementById('completedNum').textContent = d.completed_tasks;
+        document.getElementById('overdueNum').textContent = d.overdue_tasks;
+
+        var pending = 0;
+        if (d.by_status) {
+            d.by_status.forEach(function(s) { if (s.status === '待采样') pending = s.count; });
+        }
+        document.getElementById('pendingNum').textContent = pending;
+
+        var pct = d.total_tasks > 0 ? Math.round(d.completed_tasks / d.total_tasks * 100) : 0;
+        document.getElementById('progressBar').style.width = pct + '%';
+        document.getElementById('progressText').textContent = pct + '%';
+
+        var tbody = document.getElementById('companyBody');
+        tbody.innerHTML = '';
+        if (d.by_company && d.by_company.length > 0) {
+            d.by_company.forEach(function(c) {
+                var cp = c.total > 0 ? Math.round(c.completed / c.total * 100) : 0;
+                var tr = document.createElement('tr');
+                tr.innerHTML = '<td>' + esc(c.company_name) + '</td><td>' + c.total + '</td><td>' + c.completed + '</td>' +
+                    '<td><div class="progress"><div class="progress-bar" style="background:#3498db;width:' + cp + '%;"></div></div></td>' +
+                    '<td>' + cp + '%</td>';
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>';
+        }
+    }).catch(function(e) {
+        showToast(e.detail || '加载失败', 'error');
+    });
+}
+
+function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+loadDashboard();
+</script>
+{% endblock %}

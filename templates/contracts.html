@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+{% block title %}合同管理 - 水质采样管理系统{% endblock %}
+{% block extra_style %}
+.detail-row { background: #f9fbff !important; }
+.detail-row:hover { background: #f9fbff !important; }
+.detail-inner { padding: 16px 20px; }
+.detail-inner h4 { font-size: 14px; margin: 12px 0 6px; color: #1a237e; }
+.detail-inner table th { background: #eef2f7; }
+.wp-block { border: 1px solid #e0e0e0; border-radius: 6px; padding: 14px; margin-bottom: 10px; background: #fafafa; }
+.wp-block-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.wp-block-head strong { font-size: 14px; }
+.items-table th, .items-table td { padding: 6px 8px; font-size: 12px; }
+{% endblock %}
+
+{% block content %}
+<div class="flex-between mb-10">
+    <h2 style="font-size:18px;">合同管理</h2>
+    <div>
+        <button class="btn btn-info mr-8" onclick="openImportModal()">Excel导入</button>
+        <button class="btn btn-primary" onclick="openAddContract()">+ 新增合同</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="filter-bar">
+        <div class="form-group"><label>公司</label><select id="filterCompany" class="form-control" onchange="loadContracts()"><option value="">全部</option></select></div>
+        <div class="form-group"><label>年度</label><select id="filterYear" class="form-control" onchange="loadContracts()">
+            <option value="">全部</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
+        </select></div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>合同编号</th><th>所属公司</th><th>年度</th><th>有效期</th><th>总金额</th><th style="width:200px;">操作</th></tr></thead>
+            <tbody id="contractBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add/Edit Contract Modal -->
+<div class="modal-overlay" id="contractModal">
+    <div class="modal" style="width:800px;">
+        <div class="modal-header"><h3 id="cmTitle">新增合同</h3><button class="modal-close" onclick="closeModal('contractModal')">&times;</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="cmId">
+            <div class="form-row">
+                <div class="form-group"><label>所属公司 *</label><select class="form-control" id="cm_company_id"></select></div>
+                <div class="form-group"><label>合同编号 *</label><input class="form-control" id="cm_contract_no"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>年度</label><input class="form-control" type="number" id="cm_year" value="2026"></div>
+                <div class="form-group"><label>总金额</label><input class="form-control" type="number" step="0.01" id="cm_total_amount"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>开始日期</label><input class="form-control" type="date" id="cm_start_date"></div>
+                <div class="form-group"><label>结束日期</label><input class="form-control" type="date" id="cm_end_date"></div>
+            </div>
+
+            <div class="flex-between mt-10" style="margin-top:18px;">
+                <strong style="font-size:14px;">水厂及检测项目</strong>
+                <button class="btn btn-sm btn-success" onclick="addWpBlock()">+ 添加水厂</button>
+            </div>
+            <div id="wpContainer" style="margin-top:10px;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('contractModal')">取消</button>
+            <button class="btn btn-primary" onclick="saveContract()">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- Excel Import Modal -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal" style="width:520px;">
+        <div class="modal-header"><h3>Excel导入</h3><button class="modal-close" onclick="closeModal('importModal')">&times;</button></div>
+        <div class="modal-body">
+            <div class="form-group"><label>公司 *</label><select class="form-control" id="imp_company_id"></select></div>
+            <div class="form-row">
+                <div class="form-group"><label>合同编号 *</label><input class="form-control" id="imp_contract_no"></div>
+                <div class="form-group"><label>年度</label><input class="form-control" type="number" id="imp_year" value="2026"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>开始日期</label><input class="form-control" type="date" id="imp_start_date"></div>
+                <div class="form-group"><label>结束日期</label><input class="form-control" type="date" id="imp_end_date"></div>
+            </div>
+            <div class="form-group"><label>总金额</label><input class="form-control" type="number" step="0.01" id="imp_total_amount"></div>
+            <div class="form-group"><label>Excel文件 *</label><input type="file" id="imp_file" accept=".xlsx,.xls" class="form-control"></div>
+            <div style="margin-top:6px;"><a href="/api/import/template" class="btn btn-sm btn-outline">下载模板</a></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('importModal')">取消</button>
+            <button class="btn btn-primary" onclick="doImport()">导入</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var companies = [];
+var expandedRows = {};
+
+function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function loadCompanies(cb) {
+    api('/api/companies').then(function(list) {
+        companies = list;
+        populateCompanySelects();
+        if (cb) cb();
+    });
+}
+
+function populateCompanySelects() {
+    var ids = ['filterCompany', 'cm_company_id', 'imp_company_id'];
+    ids.forEach(function(sid) {
+        var sel = document.getElementById(sid);
+        var old = sel.value;
+        if (sid === 'filterCompany') {
+            sel.innerHTML = '<option value="">全部</option>';
+        } else {
+            sel.innerHTML = '<option value="">请选择</option>';
+        }
+        companies.forEach(function(c) {
+            sel.innerHTML += '<option value="' + c.id + '">' + esc(c.name) + '</option>';
+        });
+        sel.value = old;
+    });
+}
+
+function companyName(id) {
+    for (var i = 0; i < companies.length; i++) { if (companies[i].id == id) return companies[i].name; }
+    return '';
+}
+
+function loadContracts() {
+    var cid = document.getElementById('filterCompany').value;
+    var yr = document.getElementById('filterYear').value;
+    var params = [];
+    if (cid) params.push('company_id=' + cid);
+    if (yr) params.push('year=' + yr);
+    var url = '/api/contracts' + (params.length ? '?' + params.join('&') : '');
+
+    api(url).then(function(list) {
+        var tbody = document.getElementById('contractBody');
+        tbody.innerHTML = '';
+        if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>'; return; }
+        list.forEach(function(c) {
+            var period = (c.start_date || '-') + ' ~ ' + (c.end_date || '-');
+            var amount = c.total_amount != null ? c.total_amount.toLocaleString() + ' 元' : '-';
+            var tr = document.createElement('tr');
+            tr.id = 'row-' + c.id;
+            tr.innerHTML = '<td>' + esc(c.contract_no) + '</td><td>' + esc(companyName(c.company_id)) + '</td><td>' + (c.year||'-') + '</td>' +
+                '<td>' + period + '</td><td>' + amount + '</td>' +
+                '<td>' +
+                '<button class="btn btn-sm btn-info mr-8" onclick="toggleDetail(' + c.id + ')">查看</button>' +
+                '<button class="btn btn-sm btn-warning mr-8" onclick="generatePlan(' + c.id + ')">生成计划</button>' +
+                '<button class="btn btn-sm btn-danger" onclick="delContract(' + c.id + ')">删除</button></td>';
+            tbody.appendChild(tr);
+
+            if (expandedRows[c.id]) {
+                loadDetailRow(c.id, tbody);
+            }
+        });
+    }).catch(function(e) { showToast(e.detail || '加载失败', 'error'); });
+}
+
+function toggleDetail(id) {
+    var existing = document.getElementById('detail-' + id);
+    if (existing) { existing.remove(); delete expandedRows[id]; return; }
+    expandedRows[id] = true;
+    var tbody = document.getElementById('contractBody');
+    loadDetailRow(id, tbody);
+}
+
+function loadDetailRow(id, tbody) {
+    api('/api/contracts/' + id).then(function(c) {
+        var existing = document.getElementById('detail-' + id);
+        if (existing) existing.remove();
+
+        var anchor = document.getElementById('row-' + id);
+        if (!anchor) return;
+
+        var detailTr = document.createElement('tr');
+        detailTr.id = 'detail-' + id;
+        detailTr.className = 'detail-row';
+        var td = document.createElement('td');
+        td.colSpan = 6;
+
+        var html = '<div class="detail-inner">';
+        if (!c.water_plants || !c.water_plants.length) {
+            html += '<p style="color:#999;">暂无水厂信息</p>';
+        } else {
+            c.water_plants.forEach(function(wp) {
+                html += '<div class="wp-block"><div class="wp-block-head"><strong>' + esc(wp.name) + '</strong><span style="color:#888;font-size:12px;">规模: ' + esc(wp.scale) + ' | 采样点: ' + esc(wp.sampling_points) + '</span></div>';
+                if (wp.detection_items && wp.detection_items.length) {
+                    html += '<table class="items-table"><thead><tr><th>样品类别</th><th>检测项目</th><th>检测标准</th><th>频次类型</th><th>频次</th><th>单价</th><th>年次数</th><th>小计</th></tr></thead><tbody>';
+                    wp.detection_items.forEach(function(di) {
+                        html += '<tr><td>' + esc(di.sample_type) + '</td><td>' + esc(di.detection_project) + '</td><td>' + esc(di.detection_standard) + '</td>' +
+                            '<td>' + esc(di.frequency_type) + '</td><td>' + di.frequency_value + '</td><td>' + (di.unit_price||'-') + '</td><td>' + (di.annual_count||'-') + '</td><td>' + (di.subtotal||'-') + '</td></tr>';
+                    });
+                    html += '</tbody></table>';
+                } else {
+                    html += '<p style="color:#999;font-size:12px;">暂无检测项目</p>';
+                }
+                html += '</div>';
+            });
+        }
+        html += '</div>';
+        td.innerHTML = html;
+        detailTr.appendChild(td);
+        anchor.parentNode.insertBefore(detailTr, anchor.nextSibling);
+    });
+}
+
+function generatePlan(id) {
+    if (!confirm('确定为此合同生成采样计划？')) return;
+    apiJSON('/api/contracts/' + id + '/generate-plan', 'POST', {}).then(function(r) {
+        showToast('计划生成成功');
+    }).catch(function(e) { showToast(e.detail || '生成失败', 'error'); });
+}
+
+function delContract(id) {
+    if (!confirmDelete()) return;
+    api('/api/contracts/' + id, {method:'DELETE'}).then(function() {
+        showToast('删除成功');
+        loadContracts();
+    }).catch(function(e) { showToast(e.detail || '删除失败', 'error'); });
+}
+
+/* ===== Add Contract Modal ===== */
+var wpIndex = 0;
+
+function openAddContract() {
+    document.getElementById('cmTitle').textContent = '新增合同';
+    document.getElementById('cmId').value = '';
+    document.getElementById('cm_company_id').value = '';
+    document.getElementById('cm_contract_no').value = '';
+    document.getElementById('cm_year').value = '2026';
+    document.getElementById('cm_total_amount').value = '';
+    document.getElementById('cm_start_date').value = '';
+    document.getElementById('cm_end_date').value = '';
+    document.getElementById('wpContainer').innerHTML = '';
+    wpIndex = 0;
+    openModal('contractModal');
+}
+
+function addWpBlock() {
+    var idx = wpIndex++;
+    var div = document.createElement('div');
+    div.className = 'dynamic-section';
+    div.id = 'wp-' + idx;
+    div.innerHTML =
+        '<div class="dynamic-section-header"><strong>水厂 #' + (idx+1) + '</strong><button class="btn btn-sm btn-danger" onclick="removeWp(' + idx + ')">移除</button></div>' +
+        '<div class="form-row"><div class="form-group"><label>水厂名称 *</label><input class="form-control wp-name" data-idx="' + idx + '"></div>' +
+        '<div class="form-group"><label>规模</label><input class="form-control wp-scale" data-idx="' + idx + '"></div>' +
+        '<div class="form-group"><label>采样点</label><input class="form-control wp-points" data-idx="' + idx + '"></div></div>' +
+        '<div class="flex-between mt-10"><span style="font-size:13px;font-weight:600;">检测项目</span><button class="btn btn-sm btn-success" onclick="addDiRow(' + idx + ')">+ 添加项目</button></div>' +
+        '<table class="items-table" style="margin-top:6px;"><thead><tr><th>样品类别</th><th>检测项目</th><th>检测标准</th><th>频次类型</th><th>频次</th><th>单价</th><th>年次数</th><th>小计</th><th></th></tr></thead>' +
+        '<tbody id="di-body-' + idx + '"></tbody></table>';
+    document.getElementById('wpContainer').appendChild(div);
+}
+
+function removeWp(idx) { var el = document.getElementById('wp-' + idx); if (el) el.remove(); }
+
+function addDiRow(wpIdx) {
+    var tbody = document.getElementById('di-body-' + wpIdx);
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+        '<td><input class="form-control" style="width:80px;" name="di_sample_type"></td>' +
+        '<td><input class="form-control" style="width:100px;" name="di_detection_project"></td>' +
+        '<td><input class="form-control" style="width:100px;" name="di_detection_standard"></td>' +
+        '<td><select class="form-control" style="width:70px;" name="di_frequency_type"><option value="月">月</option><option value="季">季</option><option value="半年">半年</option><option value="年">年</option></select></td>' +
+        '<td><input class="form-control" style="width:50px;" type="number" name="di_frequency_value" value="1"></td>' +
+        '<td><input class="form-control" style="width:70px;" type="number" step="0.01" name="di_unit_price"></td>' +
+        '<td><input class="form-control" style="width:55px;" type="number" name="di_annual_count"></td>' +
+        '<td><input class="form-control" style="width:70px;" type="number" step="0.01" name="di_subtotal"></td>' +
+        '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove()">x</button></td>';
+    tbody.appendChild(tr);
+}
+
+function saveContract() {
+    var companyId = document.getElementById('cm_company_id').value;
+    var contractNo = document.getElementById('cm_contract_no').value.trim();
+    if (!companyId || !contractNo) { showToast('请填写公司和合同编号', 'error'); return; }
+
+    var water_plants = [];
+    var wpBlocks = document.querySelectorAll('#wpContainer .dynamic-section');
+    wpBlocks.forEach(function(block) {
+        var idx = block.querySelector('.wp-name').dataset.idx;
+        var wp = {
+            name: block.querySelector('.wp-name').value.trim(),
+            scale: block.querySelector('.wp-scale').value.trim() || null,
+            sampling_points: block.querySelector('.wp-points').value.trim() || null,
+            detection_items: []
+        };
+        var rows = block.querySelectorAll('#di-body-' + idx + ' tr');
+        rows.forEach(function(row) {
+            var inputs = row.querySelectorAll('input, select');
+            wp.detection_items.push({
+                sample_type: inputs[0].value.trim() || null,
+                detection_project: inputs[1].value.trim() || null,
+                detection_standard: inputs[2].value.trim() || null,
+                frequency_type: inputs[3].value || null,
+                frequency_value: parseInt(inputs[4].value) || 1,
+                unit_price: parseFloat(inputs[5].value) || null,
+                annual_count: parseInt(inputs[6].value) || null,
+                subtotal: parseFloat(inputs[7].value) || null
+            });
+        });
+        water_plants.push(wp);
+    });
+
+    var body = {
+        contract_no: contractNo,
+        company_id: parseInt(companyId),
+        year: parseInt(document.getElementById('cm_year').value) || null,
+        start_date: document.getElementById('cm_start_date').value || null,
+        end_date: document.getElementById('cm_end_date').value || null,
+        total_amount: parseFloat(document.getElementById('cm_total_amount').value) || null,
+        water_plants: water_plants
+    };
+
+    apiJSON('/api/contracts', 'POST', body).then(function() {
+        closeModal('contractModal');
+        showToast('合同创建成功');
+        loadContracts();
+    }).catch(function(e) { showToast(e.detail || '保存失败', 'error'); });
+}
+
+/* ===== Excel Import ===== */
+function openImportModal() { openModal('importModal'); }
+
+function doImport() {
+    var cid = document.getElementById('imp_company_id').value;
+    var cno = document.getElementById('imp_contract_no').value.trim();
+    var fileEl = document.getElementById('imp_file');
+    if (!cid || !cno || !fileEl.files.length) { showToast('请填写必填项并选择文件', 'error'); return; }
+
+    var fd = new FormData();
+    fd.append('file', fileEl.files[0]);
+    fd.append('company_id', cid);
+    fd.append('contract_no', cno);
+    fd.append('year', document.getElementById('imp_year').value || '');
+    fd.append('start_date', document.getElementById('imp_start_date').value || '');
+    fd.append('end_date', document.getElementById('imp_end_date').value || '');
+    fd.append('total_amount', document.getElementById('imp_total_amount').value || '');
+
+    fetch('/api/import/excel', { method: 'POST', body: fd }).then(function(r) {
+        if (!r.ok) return r.json().then(function(e){ throw e; });
+        return r.json();
+    }).then(function() {
+        closeModal('importModal');
+        showToast('导入成功');
+        loadContracts();
+    }).catch(function(e) { showToast(e.detail || '导入失败', 'error'); });
+}
+
+loadCompanies(function() { loadContracts(); });
+</script>
+{% endblock %}

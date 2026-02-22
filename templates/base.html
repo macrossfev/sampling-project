@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}水质采样管理系统{% endblock %}</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; font-size: 14px; line-height: 1.5; }
+a { text-decoration: none; color: inherit; }
+
+/* ===== Layout ===== */
+.header { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #1a237e; color: #fff; display: flex; align-items: center; padding: 0 24px; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.header h1 { font-size: 18px; font-weight: 600; letter-spacing: 1px; }
+
+.sidebar { position: fixed; top: 56px; left: 0; bottom: 0; width: 200px; background: #2c3e50; overflow-y: auto; z-index: 90; }
+.sidebar .nav-item { display: block; padding: 14px 24px; color: #bdc3c7; font-size: 14px; border-left: 3px solid transparent; transition: all .2s; }
+.sidebar .nav-item:hover { background: #34495e; color: #fff; border-left-color: #3498db; }
+.sidebar .nav-item.active { background: #34495e; color: #fff; border-left-color: #3498db; font-weight: 600; }
+
+.main { margin-left: 200px; margin-top: 56px; padding: 20px; min-height: calc(100vh - 56px); }
+
+/* ===== Cards ===== */
+.card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 20px; margin-bottom: 20px; }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+
+/* ===== Tables ===== */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+table th, table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
+table th { background: #f8f9fa; font-weight: 600; color: #555; white-space: nowrap; }
+table tr:hover { background: #f0f7ff; }
+
+/* ===== Buttons ===== */
+.btn { display: inline-block; padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; line-height: 1.5; transition: all .2s; }
+.btn-primary { background: #1a237e; color: #fff; }
+.btn-primary:hover { background: #283593; }
+.btn-success { background: #27ae60; color: #fff; }
+.btn-success:hover { background: #2ecc71; }
+.btn-warning { background: #e67e22; color: #fff; }
+.btn-warning:hover { background: #f39c12; }
+.btn-danger { background: #c0392b; color: #fff; }
+.btn-danger:hover { background: #e74c3c; }
+.btn-info { background: #2980b9; color: #fff; }
+.btn-info:hover { background: #3498db; }
+.btn-sm { padding: 3px 10px; font-size: 12px; }
+.btn-outline { background: transparent; border: 1px solid #ccc; color: #555; }
+.btn-outline:hover { border-color: #1a237e; color: #1a237e; }
+
+/* ===== Forms ===== */
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px; color: #555; }
+.form-control { width: 100%; padding: 7px 10px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px; transition: border-color .2s; outline: none; }
+.form-control:focus { border-color: #1a237e; box-shadow: 0 0 0 2px rgba(26,35,126,.1); }
+select.form-control { appearance: auto; }
+
+/* ===== Filter Bar ===== */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+.filter-bar .form-group { margin-bottom: 0; }
+.filter-bar .form-group label { margin-bottom: 2px; }
+.filter-bar .form-control { width: 160px; }
+
+/* ===== Modal ===== */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.45); z-index: 200; justify-content: center; align-items: flex-start; padding-top: 60px; }
+.modal-overlay.show { display: flex; }
+.modal { background: #fff; border-radius: 8px; width: 680px; max-width: 95vw; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #eee; }
+.modal-header h3 { font-size: 16px; font-weight: 600; }
+.modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #999; line-height: 1; }
+.modal-close:hover { color: #333; }
+.modal-body { padding: 20px; }
+.modal-footer { padding: 12px 20px; border-top: 1px solid #eee; text-align: right; }
+.modal-footer .btn { margin-left: 8px; }
+
+/* ===== Badges ===== */
+.badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 500; }
+.badge-gray { background: #ecf0f1; color: #7f8c8d; }
+.badge-orange { background: #fef0e1; color: #e67e22; }
+.badge-blue { background: #e1ecf7; color: #2980b9; }
+.badge-green { background: #e1f5e8; color: #27ae60; }
+
+/* ===== Toast ===== */
+.toast-container { position: fixed; top: 70px; right: 20px; z-index: 999; }
+.toast { padding: 12px 20px; border-radius: 6px; color: #fff; font-size: 13px; margin-bottom: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.15); animation: toastIn .3s ease; min-width: 200px; }
+.toast-success { background: #27ae60; }
+.toast-error { background: #c0392b; }
+.toast-info { background: #2980b9; }
+@keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ===== Summary Cards ===== */
+.summary-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.summary-card { flex: 1; min-width: 180px; border-radius: 8px; padding: 20px; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+.summary-card .num { font-size: 36px; font-weight: 700; }
+.summary-card .label { font-size: 14px; opacity: .85; margin-top: 4px; }
+
+/* ===== Progress Bar ===== */
+.progress { background: #e9ecef; border-radius: 6px; height: 12px; overflow: hidden; }
+.progress-bar { height: 100%; border-radius: 6px; transition: width .4s ease; }
+
+/* ===== Inline Form Row ===== */
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; }
+
+/* ===== Dynamic List ===== */
+.dynamic-section { border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px; margin-bottom: 12px; background: #fafafa; }
+.dynamic-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+
+/* ===== Checkbox ===== */
+input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
+/* ===== Pagination ===== */
+.pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 16px; }
+.pagination .btn { min-width: 70px; text-align: center; }
+.pagination .page-info { font-size: 13px; color: #666; }
+
+/* ===== Utility ===== */
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.mt-10 { margin-top: 10px; }
+.mb-10 { margin-bottom: 10px; }
+.mr-8 { margin-right: 8px; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+
+{% block extra_style %}{% endblock %}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>水质采样管理系统</h1>
+</div>
+
+<div class="sidebar">
+    <a href="/" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">看板</a>
+    <a href="/contracts" class="nav-item {% if active_page == 'contracts' %}active{% endif %}">合同管理</a>
+    <a href="/pdf-import" class="nav-item {% if active_page == 'pdf_import' %}active{% endif %}">文档导入</a>
+    <a href="/monthly-plan" class="nav-item {% if active_page == 'monthly_plan' %}active{% endif %}">月度计划</a>
+    <a href="/tasks" class="nav-item {% if active_page == 'tasks' %}active{% endif %}">采样任务</a>
+    <a href="/companies" class="nav-item {% if active_page == 'companies' %}active{% endif %}">公司管理</a>
+</div>
+
+<div class="main">
+    {% block content %}{% endblock %}
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+function showToast(msg, type) {
+    type = type || 'success';
+    var c = document.getElementById('toastContainer');
+    var d = document.createElement('div');
+    d.className = 'toast toast-' + type;
+    d.textContent = msg;
+    c.appendChild(d);
+    setTimeout(function(){ d.remove(); }, 3000);
+}
+
+function api(url, opts) {
+    opts = opts || {};
+    return fetch(url, opts).then(function(r) {
+        if (!r.ok) return r.json().then(function(e){ throw e; }).catch(function(){ throw {detail: '请求失败 (' + r.status + ')'}; });
+        if (r.status === 204) return null;
+        return r.json();
+    });
+}
+
+function apiJSON(url, method, body) {
+    return api(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+}
+
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function confirmDelete(msg) { return confirm(msg || '确定删除此记录？'); }
+</script>
+
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

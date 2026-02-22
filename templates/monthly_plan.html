@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+{% block title %}月度计划 - 水质采样管理系统{% endblock %}
+
+{% block extra_style %}
+.plan-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.plan-toolbar select, .plan-toolbar button { height:36px; }
+.plan-toolbar .spacer { flex:1; }
+.scheme-desc { font-size:12px; color:#888; margin-left:4px; }
+.plan-grid { width:100%; border-collapse:collapse; table-layout:fixed; }
+.plan-grid th, .plan-grid td { border:1px solid #d0d0d0; padding:8px; vertical-align:top; font-size:12px; }
+.plan-grid th { background:#1a237e; color:#fff; text-align:center; font-size:13px; }
+.plan-grid th.row-header { width:60px; background:#283593; }
+.plan-grid td { background:#fafbfc; }
+.trip-cell { min-height:80px; }
+.trip-cell .tc-company { font-weight:700; color:#1a237e; font-size:13px; margin-bottom:4px; }
+.trip-cell .tc-dates { color:#e65100; font-size:11px; margin-bottom:4px; }
+.trip-cell .tc-route { color:#555; font-size:11px; margin-bottom:4px; white-space:pre-line; }
+.trip-cell .tc-samples { color:#2e7d32; font-size:11px; white-space:pre-line; }
+.trip-cell .tc-tag { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; margin-bottom:4px; }
+.tag-two { background:#fff3e0; color:#e65100; }
+.tag-single { background:#e8f5e9; color:#2e7d32; }
+.trip-cell .tc-actions { margin-top:6px; text-align:right; }
+.trip-cell .tc-actions button { font-size:10px; padding:2px 6px; }
+.empty-cell { color:#bbb; text-align:center; padding-top:30px; font-style:italic; }
+#planStatus { margin-top:16px; font-size:13px; }
+.stats-bar { display:flex; gap:16px; margin-bottom:12px; font-size:13px; color:#555; }
+.stats-bar b { color:#1a237e; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">月度采样计划</div>
+
+    <div class="plan-toolbar">
+        <select id="planYear" class="form-control" style="width:100px;" onchange="loadPlan()">
+            <option value="2025">2025年</option>
+            <option value="2026" selected>2026年</option>
+            <option value="2027">2027年</option>
+        </select>
+        <select id="planMonth" class="form-control" style="width:90px;" onchange="loadPlan()"></select>
+        <div class="spacer"></div>
+        <label style="font-size:13px;">方案：</label>
+        <select id="schemeSelect" class="form-control" style="width:130px;">
+            <option value="compact">紧凑方案</option>
+            <option value="balanced" selected>均衡方案</option>
+            <option value="relaxed">宽松方案</option>
+        </select>
+        <button class="btn btn-primary" onclick="generatePlan()">生成计划</button>
+        <button class="btn btn-outline" onclick="addTrip()">+ 手动添加</button>
+    </div>
+    <div class="scheme-desc" id="schemeDesc">两日行程间隔1天休息，单日行程连续安排</div>
+
+    <div class="stats-bar" id="statsBar" style="display:none;">
+        <span>总行程：<b id="statTotal">0</b></span>
+        <span>两日行程：<b id="statTwo">0</b></span>
+        <span>单日行程：<b id="statSingle">0</b></span>
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table class="plan-grid" id="planTable">
+            <thead id="planHead">
+                <tr>
+                    <th class="row-header">日期</th>
+                    <th>第一组</th>
+                </tr>
+            </thead>
+            <tbody id="planBody">
+                <tr><td colspan="2" class="empty-cell">请选择年月后点击"生成计划"</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="planStatus"></div>
+</div>
+
+<!-- Edit Trip Modal -->
+<div class="modal" id="editTripModal">
+    <div class="modal-content" style="max-width:500px;">
+        <div class="modal-header">
+            <h3 id="editTripTitle">编辑行程</h3>
+            <span class="modal-close" onclick="closeModal('editTripModal')">&times;</span>
+        </div>
+        <input type="hidden" id="etId">
+        <div class="form-group">
+            <label>公司</label>
+            <select id="etCompany" class="form-control"></select>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>组别（自动分配，可调整）</label>
+                <select id="etGroup" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label>类型</label>
+                <select id="etType" class="form-control" onchange="onTripTypeChange()">
+                    <option value="single_day">当日往返</option>
+                    <option value="two_day">两日行程</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>开始日期</label>
+                <input id="etStart" type="date" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>结束日期</label>
+                <input id="etEnd" type="date" class="form-control">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>行程说明</label>
+            <textarea id="etRoute" class="form-control" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+            <label>采样内容</label>
+            <textarea id="etSamples" class="form-control" rows="3"></textarea>
+        </div>
+        <div style="text-align:right; margin-top:12px;">
+            <button class="btn btn-outline" onclick="closeModal('editTripModal')">取消</button>
+            <button class="btn btn-primary" onclick="saveTrip()" style="margin-left:8px;">保存</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var tripsData = [];
+var companiesCache = [];
+
+(function init() {
+    var sel = document.getElementById('planMonth');
+    for (var m = 1; m <= 12; m++) sel.innerHTML += '<option value="'+m+'">'+m+'月</option>';
+    sel.value = new Date().getMonth() + 1;
+    document.getElementById('schemeSelect').addEventListener('change', updateSchemeDesc);
+    updateSchemeDesc();
+    loadCompaniesForTrip();
+    loadPlan();
+})();
+
+function updateSchemeDesc() {
+    var descs = {compact:'两日行程连续安排，单日行程紧随其后，天数最少',balanced:'两日行程间隔1天休息，单日行程连续安排',relaxed:'两日行程间隔2天休息，单日行程间隔1天，最宽松'};
+    document.getElementById('schemeDesc').textContent = descs[document.getElementById('schemeSelect').value] || '';
+}
+
+function loadCompaniesForTrip() {
+    fetch('/api/companies').then(function(r){return r.json();}).then(function(list){
+        companiesCache = list;
+        var sel = document.getElementById('etCompany');
+        sel.innerHTML = '<option value="">--选择公司--</option>';
+        list.forEach(function(c){ sel.innerHTML += '<option value="'+c.id+'">'+c.name+'</option>'; });
+    });
+}
+
+function loadPlan() {
+    var y = document.getElementById('planYear').value, m = document.getElementById('planMonth').value;
+    fetch('/api/monthly-plan/trips?year='+y+'&month='+m)
+    .then(function(r){return r.json();})
+    .then(function(data){ tripsData = data; renderGrid(data); })
+    .catch(function(){ document.getElementById('planBody').innerHTML = '<tr><td colspan="2" class="empty-cell">加载失败</td></tr>'; });
+}
+
+function renderGrid(trips) {
+    var head = document.getElementById('planHead');
+    var body = document.getElementById('planBody');
+    var bar = document.getElementById('statsBar');
+    // Find max group_no dynamically
+    var maxG = 0;
+    trips.forEach(function(t){ if (t.group_no > maxG) maxG = t.group_no; });
+    if (maxG < 1) maxG = 1;
+    // Build dynamic header
+    var hhtml = '<tr><th class="row-header">日期</th>';
+    for (var g = 1; g <= maxG; g++) hhtml += '<th>第'+['一','二','三','四','五','六','七','八','九','十'][g-1]+'组</th>';
+    hhtml += '</tr>';
+    head.innerHTML = hhtml;
+    if (!trips || trips.length === 0) {
+        body.innerHTML = '<tr><td colspan="'+(maxG+1)+'" class="empty-cell">暂无计划，请点击"生成计划"</td></tr>';
+        bar.style.display = 'none'; return;
+    }
+    bar.style.display = 'flex';
+    document.getElementById('statTotal').textContent = trips.length;
+    document.getElementById('statTwo').textContent = trips.filter(function(t){return t.trip_type==='two_day';}).length;
+    document.getElementById('statSingle').textContent = trips.filter(function(t){return t.trip_type!=='two_day';}).length;
+    // Group by date range
+    var dateGroups = {};
+    trips.forEach(function(t) {
+        var key = t.start_date + '~' + t.end_date;
+        if (!dateGroups[key]) dateGroups[key] = {start:t.start_date, end:t.end_date, cells:{}};
+        dateGroups[key].cells[t.group_no] = t;
+    });
+    var rows = Object.values(dateGroups).sort(function(a,b){ return a.start < b.start ? -1 : 1; });
+    var html = '';
+    rows.forEach(function(row) {
+        html += '<tr><td class="row-header" style="text-align:center;font-weight:600;font-size:12px;">'+fmtRange(row.start,row.end)+'</td>';
+        for (var g = 1; g <= maxG; g++) {
+            var t = row.cells[g];
+            if (t) {
+                var tagCls = t.trip_type==='two_day'?'tag-two':'tag-single';
+                var tagTxt = t.trip_type==='two_day'?'两日':'当日';
+                html += '<td class="trip-cell"><span class="tc-tag '+tagCls+'">'+tagTxt+'</span>';
+                html += '<div class="tc-company">'+(t.company_name||'--')+'</div>';
+                html += '<div class="tc-dates">'+fmtRange(t.start_date,t.end_date)+'</div>';
+                if (t.route_notes) html += '<div class="tc-route">'+esc(t.route_notes)+'</div>';
+                if (t.sampling_notes) html += '<div class="tc-samples">'+esc(t.sampling_notes)+'</div>';
+                html += '<div class="tc-actions"><button class="btn btn-info btn-sm" onclick="editTrip('+t.id+')">编辑</button> <button class="btn btn-danger btn-sm" onclick="delTrip('+t.id+')">删除</button></div></td>';
+            } else { html += '<td class="empty-cell">-</td>'; }
+        }
+        html += '</tr>';
+    });
+    body.innerHTML = html;
+}
+
+function fmtRange(s, e) {
+    var sp=s.split('-'),ep=e.split('-'),sm=parseInt(sp[1]),sd=parseInt(sp[2]),em=parseInt(ep[1]),ed=parseInt(ep[2]);
+    return s===e ? sm+'.'+sd : sm+'.'+sd+'-'+em+'.'+ed;
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+
+// Auto-assign next available group_no for a given date range
+function nextGroupNo(startDate, endDate, excludeId) {
+    var key = startDate+'~'+endDate;
+    var used = {};
+    tripsData.forEach(function(t){
+        if (excludeId && t.id == excludeId) return;
+        if (t.start_date+'~'+t.end_date === key) used[t.group_no] = true;
+    });
+    for (var g = 1; g <= 99; g++) { if (!used[g]) return g; }
+    return 1;
+}
+
+// Rebuild group dropdown up to max+1, select given value
+function refreshGroupSelect(selected) {
+    var maxG = 0;
+    tripsData.forEach(function(t){ if(t.group_no>maxG) maxG=t.group_no; });
+    var limit = Math.max(maxG+1, selected, 4);
+    var sel = document.getElementById('etGroup');
+    var names = ['一','二','三','四','五','六','七','八','九','十'];
+    sel.innerHTML = '';
+    for (var g = 1; g <= limit; g++) {
+        var label = g <= names.length ? '第'+names[g-1]+'组' : '第'+g+'组';
+        sel.innerHTML += '<option value="'+g+'"'+(g==selected?' selected':'')+'>'+label+'</option>';
+    }
+}
+
+// When trip type changes, auto-adjust end_date
+function onTripTypeChange() {
+    var tp = document.getElementById('etType').value;
+    var startVal = document.getElementById('etStart').value;
+    if (!startVal) return;
+    if (tp === 'two_day') {
+        var d = new Date(startVal);
+        d.setDate(d.getDate() + 1);
+        document.getElementById('etEnd').value = d.toISOString().slice(0,10);
+    } else {
+        document.getElementById('etEnd').value = startVal;
+    }
+}
+
+// Also adjust when start_date changes
+document.addEventListener('DOMContentLoaded', function(){
+    document.getElementById('etStart').addEventListener('change', function(){
+        onTripTypeChange();
+        // Recalc auto group
+        var id = document.getElementById('etId').value;
+        var sd = document.getElementById('etStart').value, ed = document.getElementById('etEnd').value;
+        var auto = nextGroupNo(sd, ed, id||null);
+        refreshGroupSelect(auto);
+    });
+});
+
+function generatePlan() {
+    var y=document.getElementById('planYear').value, m=document.getElementById('planMonth').value;
+    var scheme=document.getElementById('schemeSelect').value;
+    if (!confirm('将重新生成 '+y+'年'+m+'月 的采样计划（'+{compact:'紧凑',balanced:'均衡',relaxed:'宽松'}[scheme]+'方案），已有计划会被覆盖，确定？')) return;
+    apiJSON('/api/monthly-plan/generate','POST',{year:parseInt(y),month:parseInt(m),scheme:scheme})
+    .then(function(r){ showToast('已生成 '+r.trips+' 个行程','success'); loadPlan(); })
+    .catch(function(e){ showToast(e.detail||'生成失败','error'); });
+}
+
+function addTrip() {
+    document.getElementById('editTripTitle').textContent = '添加行程';
+    document.getElementById('etId').value = '';
+    document.getElementById('etCompany').value = '';
+    document.getElementById('etType').value = 'single_day';
+    var y=document.getElementById('planYear').value, m=document.getElementById('planMonth').value;
+    var mm = m<10?'0'+m:m;
+    document.getElementById('etStart').value = y+'-'+mm+'-01';
+    document.getElementById('etEnd').value = y+'-'+mm+'-01';
+    var autoG = nextGroupNo(y+'-'+mm+'-01', y+'-'+mm+'-01', null);
+    refreshGroupSelect(autoG);
+    document.getElementById('etRoute').value = '';
+    document.getElementById('etSamples').value = '';
+    openModal('editTripModal');
+}
+
+function editTrip(id) {
+    var t = tripsData.find(function(x){return x.id===id;});
+    if (!t) return;
+    document.getElementById('editTripTitle').textContent = '编辑行程';
+    document.getElementById('etId').value = t.id;
+    document.getElementById('etCompany').value = t.company_id;
+    document.getElementById('etType').value = t.trip_type;
+    document.getElementById('etStart').value = t.start_date;
+    document.getElementById('etEnd').value = t.end_date;
+    refreshGroupSelect(t.group_no);
+    document.getElementById('etRoute').value = t.route_notes||'';
+    document.getElementById('etSamples').value = t.sampling_notes||'';
+    openModal('editTripModal');
+}
+
+function saveTrip() {
+    var id = document.getElementById('etId').value;
+    var companyId = parseInt(document.getElementById('etCompany').value);
+    if (!companyId) { showToast('请选择公司','error'); return; }
+    var payload = {
+        company_id: companyId,
+        group_no: parseInt(document.getElementById('etGroup').value),
+        trip_type: document.getElementById('etType').value,
+        start_date: document.getElementById('etStart').value,
+        end_date: document.getElementById('etEnd').value,
+        route_notes: document.getElementById('etRoute').value,
+        sampling_notes: document.getElementById('etSamples').value
+    };
+    if (id) {
+        apiJSON('/api/monthly-plan/trips/'+id,'PUT',payload)
+        .then(function(){ showToast('已更新','success'); closeModal('editTripModal'); loadPlan(); })
+        .catch(function(e){ showToast(e.detail||'更新失败','error'); });
+    } else {
+        payload.year = parseInt(document.getElementById('planYear').value);
+        payload.month = parseInt(document.getElementById('planMonth').value);
+        apiJSON('/api/monthly-plan/trips','POST',payload)
+        .then(function(){ showToast('已添加','success'); closeModal('editTripModal'); loadPlan(); })
+        .catch(function(e){ showToast(e.detail||'添加失败','error'); });
+    }
+}
+
+function delTrip(id) {
+    if (!confirm('确定删除此行程？')) return;
+    api('/api/monthly-plan/trips/'+id,{method:'DELETE'})
+    .then(function(){ showToast('已删除','success'); loadPlan(); })
+    .catch(function(e){ showToast(e.detail||'删除失败','error'); });
+}
+</script>
+{% endblock %}

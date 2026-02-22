@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% block title %}文档导入 - 水质采样管理系统{% endblock %}
+
+{% block extra_style %}
+.upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 40px; text-align: center; background: #fafafa; margin-bottom: 20px; }
+.upload-area input[type="file"] { margin: 10px auto; }
+.parsed-field { background: #e8f5e9 !important; }
+.section-plant { border: 1px solid #c8e6c9; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #fafbfc; }
+.section-plant-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e0e0e0; }
+.section-plant-header h4 { font-size: 15px; font-weight: 600; color: #2c3e50; }
+.item-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.item-table th, .item-table td { padding: 6px 4px; font-size: 12px; border-bottom: 1px solid #eee; }
+.item-table th { background: #f0f0f0; white-space: nowrap; }
+.item-table input, .item-table select { width: 100%; padding: 4px 6px; border: 1px solid #d0d0d0; border-radius: 3px; font-size: 12px; box-sizing: border-box; }
+.item-table input:focus, .item-table select:focus { border-color: #1a237e; outline: none; }
+.collapsible-header { cursor: pointer; padding: 10px 0; font-weight: 600; color: #555; user-select: none; }
+.collapsible-header:hover { color: #1a237e; }
+.collapsible-body { display: none; }
+.collapsible-body.open { display: block; }
+#loadingText { display: none; color: #2980b9; font-size: 14px; margin-top: 12px; }
+#reviewSection { display: none; }
+.plant-inputs { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.plant-inputs .form-group { flex: 1; min-width: 150px; margin-bottom: 0; }
+.ocr-banner { background: #fff3e0; border: 1px solid #ffb74d; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; color: #e65100; font-size: 13px; display: none; }
+.ocr-banner b { color: #bf360c; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">合同文档导入</div>
+
+    <!-- STATE 1: Upload -->
+    <div id="uploadSection">
+        <div class="upload-area">
+            <p style="font-size:15px; color:#555; margin-bottom:12px;">选择合同文件进行解析（支持 PDF、Word）</p>
+            <input type="file" id="pdfFile" accept=".pdf,.docx" class="form-control" style="width:auto; display:inline-block;">
+            <br>
+            <button class="btn btn-primary" onclick="uploadPdf()" style="margin-top:14px;">上传解析</button>
+            <div id="loadingText">正在解析文档，PDF扫描件将自动进行OCR识别，请稍候...</div>
+        </div>
+    </div>
+
+    <!-- STATE 2: Review & Edit -->
+    <div id="reviewSection">
+        <div class="ocr-banner" id="ocrBanner">
+            <b>OCR识别模式：</b>该PDF为扫描件，文字通过OCR引擎识别提取，可能存在识别误差，请仔细核对各字段。
+        </div>
+        <h3 class="card-title" style="border:none; padding:0; margin-bottom:12px;">解析结果 - 请核对并编辑</h3>
+
+        <!-- Basic info -->
+        <div class="form-row" style="margin-bottom:8px;">
+            <div class="form-group">
+                <label>所属公司</label>
+                <select id="companyId" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label>合同编号</label>
+                <input id="contractNo" class="form-control" placeholder="合同编号">
+            </div>
+            <div class="form-group">
+                <label>年度</label>
+                <input id="year" type="number" class="form-control" placeholder="年度">
+            </div>
+        </div>
+        <div class="form-row" style="margin-bottom:16px;">
+            <div class="form-group">
+                <label>开始日期</label>
+                <input id="startDate" type="date" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>结束日期</label>
+                <input id="endDate" type="date" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>总金额(元)</label>
+                <input id="totalAmount" type="number" step="0.01" class="form-control" placeholder="总金额">
+            </div>
+        </div>
+
+        <!-- Water plants -->
+        <div class="flex-between mb-10">
+            <h4 style="font-weight:600;">水厂及检测项目</h4>
+            <button class="btn btn-success btn-sm" onclick="addPlant()">+ 添加水厂</button>
+        </div>
+        <div id="plantsContainer"></div>
+
+        <!-- Actions -->
+        <div style="margin-top:20px; text-align:right;">
+            <button class="btn btn-outline" onclick="resetForm()">重新上传</button>
+            <button class="btn btn-primary" onclick="submitContract()" style="margin-left:8px;">确认录入</button>
+        </div>
+
+        <!-- Raw text -->
+        <div style="margin-top:24px;">
+            <div class="collapsible-header" onclick="toggleRawText()">&#9660; 原始文档文本（点击展开/收起）</div>
+            <div class="collapsible-body" id="rawTextSection">
+                <textarea id="rawText" class="form-control" rows="15" readonly style="font-size:12px; background:#f9f9f9; font-family:monospace;"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var parsedData = null;
+var plantIndex = 0;
+
+function uploadPdf() {
+    var fileInput = document.getElementById('pdfFile');
+    if (!fileInput.files.length) { showToast('请选择PDF或Word文件', 'error'); return; }
+    var formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    document.getElementById('loadingText').style.display = 'block';
+
+    fetch('/api/contracts/parse-document', { method: 'POST', body: formData })
+    .then(function(r) {
+        if (!r.ok) return r.json().then(function(e){ throw e; });
+        return r.json();
+    })
+    .then(function(data) {
+        parsedData = data;
+        document.getElementById('loadingText').style.display = 'none';
+        showReview(data);
+    })
+    .catch(function(err) {
+        document.getElementById('loadingText').style.display = 'none';
+        showToast(err.detail || '解析失败', 'error');
+    });
+}
+
+function showReview(data) {
+    document.getElementById('uploadSection').style.display = 'none';
+    document.getElementById('reviewSection').style.display = 'block';
+
+    var ocrBanner = document.getElementById('ocrBanner');
+    ocrBanner.style.display = data.ocr_used ? 'block' : 'none';
+
+    loadCompanies(data.company_name);
+
+    setVal('contractNo', data.contract_no, true);
+    setVal('year', data.year, true);
+    setVal('startDate', data.start_date, true);
+    setVal('endDate', data.end_date, true);
+    setVal('totalAmount', data.total_amount, true);
+    setVal('rawText', data.raw_text, false);
+
+    plantIndex = 0;
+    document.getElementById('plantsContainer').innerHTML = '';
+    if (data.water_plants && data.water_plants.length > 0) {
+        data.water_plants.forEach(function(wp) { addPlant(wp); });
+    } else {
+        addPlant(null);
+    }
+}
+
+function setVal(id, val, highlight) {
+    var el = document.getElementById(id);
+    if (val !== null && val !== undefined && val !== '') {
+        el.value = val;
+        if (highlight) el.classList.add('parsed-field');
+    } else {
+        el.value = '';
+        el.classList.remove('parsed-field');
+    }
+}
+
+function loadCompanies(matchName) {
+    fetch('/api/companies').then(function(r){ return r.json(); }).then(function(list){
+        var sel = document.getElementById('companyId');
+        sel.innerHTML = '<option value="">-- 请选择公司 --</option>';
+        var matched = false;
+        list.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            if (matchName && c.name && (c.name.indexOf(matchName) >= 0 || (matchName && matchName.indexOf(c.name) >= 0))) {
+                opt.selected = true;
+                matched = true;
+            }
+            sel.appendChild(opt);
+        });
+        if (matched) sel.classList.add('parsed-field');
+    });
+}
+
+function addPlant(wp) {
+    var idx = plantIndex++;
+    var container = document.getElementById('plantsContainer');
+    var div = document.createElement('div');
+    div.className = 'section-plant';
+    div.id = 'plant-' + idx;
+
+    var nameVal = wp ? wp.name || '' : '';
+    var scaleVal = wp ? wp.scale || '' : '';
+    var nameCls = (wp && wp.name) ? 'parsed-field' : '';
+    var scaleCls = (wp && wp.scale) ? 'parsed-field' : '';
+
+    var html = '<div class="section-plant-header"><h4>水厂 #' + (idx + 1) + '</h4><button class="btn btn-danger btn-sm" onclick="removePlant(' + idx + ')">删除水厂</button></div>';
+    html += '<div class="plant-inputs">';
+    html += '<div class="form-group"><label>水厂名称</label><input class="form-control ' + nameCls + '" data-field="name" value="' + escHtml(nameVal) + '"></div>';
+    html += '<div class="form-group"><label>规模</label><input class="form-control ' + scaleCls + '" data-field="scale" value="' + escHtml(scaleVal) + '"></div>';
+    html += '<div class="form-group"><label>采样点</label><input class="form-control" data-field="sampling_points" value=""></div>';
+    html += '</div>';
+    html += '<div class="table-wrap"><table class="item-table"><thead><tr>';
+    html += '<th>样品类别</th><th>检测项目</th><th>检测级别</th><th>检测标准</th><th>频率类型</th><th>频率值</th><th>单价</th><th>年检测次数</th><th>小计</th><th>操作</th>';
+    html += '</tr></thead><tbody id="items-' + idx + '"></tbody></table></div>';
+    html += '<button class="btn btn-info btn-sm mt-10" onclick="addItem(' + idx + ', null)">+ 添加检测项</button>';
+
+    div.innerHTML = html;
+    container.appendChild(div);
+
+    if (wp && wp.items && wp.items.length > 0) {
+        wp.items.forEach(function(item) { addItem(idx, item); });
+    } else {
+        addItem(idx, null);
+    }
+}
+
+function removePlant(idx) {
+    var el = document.getElementById('plant-' + idx);
+    if (el) el.remove();
+}
+
+function addItem(plantIdx, item) {
+    var tbody = document.getElementById('items-' + plantIdx);
+    if (!tbody) return;
+    var tr = document.createElement('tr');
+    var p = item || {};
+
+    function inp(field, val) {
+        var cls = (val !== null && val !== undefined && val !== '') ? 'parsed-field' : '';
+        return '<input data-field="' + field + '" class="' + cls + '" value="' + escHtml(val != null ? val : '') + '">';
+    }
+    function sel(val) {
+        var opts = ['月','季','半年','年'];
+        var cls = (val !== null && val !== undefined && val !== '') ? 'parsed-field' : '';
+        var h = '<select data-field="frequency_type" class="' + cls + '">';
+        h += '<option value="">--</option>';
+        opts.forEach(function(o) { h += '<option value="' + o + '"' + (val === o ? ' selected' : '') + '>' + o + '</option>'; });
+        h += '</select>';
+        return h;
+    }
+    function selLevel(val) {
+        var opts = ['常规','全分析'];
+        var cls = (val !== null && val !== undefined && val !== '') ? 'parsed-field' : '';
+        var h = '<select data-field="detection_level" class="' + cls + '">';
+        h += '<option value="">--</option>';
+        opts.forEach(function(o) { h += '<option value="' + o + '"' + (val === o ? ' selected' : '') + '>' + o + '</option>'; });
+        h += '</select>';
+        return h;
+    }
+
+    var subtotalVal = (p.unit_price && p.annual_count) ? (parseFloat(p.unit_price) * parseInt(p.annual_count)).toFixed(2) : '';
+
+    tr.innerHTML = '<td>' + inp('sample_type', p.sample_type) + '</td>'
+        + '<td>' + inp('detection_project', p.detection_project) + '</td>'
+        + '<td>' + selLevel(p.detection_level) + '</td>'
+        + '<td>' + inp('detection_standard', p.detection_standard) + '</td>'
+        + '<td>' + sel(p.frequency_type) + '</td>'
+        + '<td>' + inp('frequency_value', p.frequency_value) + '</td>'
+        + '<td>' + inp('unit_price', p.unit_price) + '</td>'
+        + '<td>' + inp('annual_count', p.annual_count) + '</td>'
+        + '<td><input data-field="subtotal" class="' + (subtotalVal ? 'parsed-field' : '') + '" value="' + escHtml(subtotalVal) + '" readonly style="background:#f0f0f0;"></td>'
+        + '<td><button class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">删除</button></td>';
+    tbody.appendChild(tr);
+
+    var upEl = tr.querySelector('[data-field="unit_price"]');
+    var acEl = tr.querySelector('[data-field="annual_count"]');
+    function calcSubtotal() {
+        var up = parseFloat(upEl.value) || 0;
+        var ac = parseInt(acEl.value) || 0;
+        var stEl = tr.querySelector('[data-field="subtotal"]');
+        stEl.value = (up && ac) ? (up * ac).toFixed(2) : '';
+    }
+    upEl.addEventListener('input', calcSubtotal);
+    acEl.addEventListener('input', calcSubtotal);
+}
+
+function escHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toggleRawText() {
+    var sec = document.getElementById('rawTextSection');
+    sec.classList.toggle('open');
+}
+
+function resetForm() {
+    document.getElementById('uploadSection').style.display = 'block';
+    document.getElementById('reviewSection').style.display = 'none';
+    document.getElementById('pdfFile').value = '';
+    parsedData = null;
+}
+
+function collectFormData() {
+    var companyId = document.getElementById('companyId').value;
+    if (!companyId) { showToast('请选择所属公司', 'error'); return null; }
+    var contractNo = document.getElementById('contractNo').value.trim();
+    if (!contractNo) { showToast('请填写合同编号', 'error'); return null; }
+
+    var payload = {
+        contract_no: contractNo,
+        company_id: parseInt(companyId),
+        year: parseInt(document.getElementById('year').value) || null,
+        start_date: document.getElementById('startDate').value || null,
+        end_date: document.getElementById('endDate').value || null,
+        total_amount: parseFloat(document.getElementById('totalAmount').value) || null,
+        water_plants: []
+    };
+
+    var plantDivs = document.querySelectorAll('.section-plant');
+    plantDivs.forEach(function(pd) {
+        var nameInput = pd.querySelector('[data-field="name"]');
+        var scaleInput = pd.querySelector('[data-field="scale"]');
+        var spInput = pd.querySelector('[data-field="sampling_points"]');
+        if (!nameInput) return;
+        var wpName = nameInput.value.trim();
+        if (!wpName) return;
+
+        var wp = {
+            name: wpName,
+            scale: scaleInput ? scaleInput.value.trim() : null,
+            sampling_points: spInput ? spInput.value.trim() : null,
+            detection_items: []
+        };
+
+        var rows = pd.querySelectorAll('.item-table tbody tr');
+        rows.forEach(function(tr) {
+            var item = {};
+            item.sample_type = getField(tr, 'sample_type') || null;
+            item.detection_project = getField(tr, 'detection_project') || null;
+            item.detection_level = getField(tr, 'detection_level') || null;
+            item.detection_standard = getField(tr, 'detection_standard') || null;
+            item.frequency_type = getField(tr, 'frequency_type') || null;
+            item.frequency_value = parseInt(getField(tr, 'frequency_value')) || 1;
+            item.unit_price = parseFloat(getField(tr, 'unit_price')) || null;
+            item.annual_count = parseInt(getField(tr, 'annual_count')) || null;
+            item.subtotal = parseFloat(getField(tr, 'subtotal')) || null;
+            wp.detection_items.push(item);
+        });
+
+        payload.water_plants.push(wp);
+    });
+
+    return payload;
+}
+
+function getField(tr, field) {
+    var el = tr.querySelector('[data-field="' + field + '"]');
+    return el ? el.value.trim() : '';
+}
+
+function submitContract() {
+    var data = collectFormData();
+    if (!data) return;
+
+    apiJSON('/api/contracts', 'POST', data)
+    .then(function(result) {
+        showToast('合同录入成功！', 'success');
+        var msg = '合同已创建 (ID: ' + result.id + ')。\n是否立即生成采样计划？';
+        if (confirm(msg)) {
+            apiJSON('/api/contracts/' + result.id + '/generate-plan', 'POST', {})
+            .then(function(r) {
+                showToast('已生成 ' + r.tasks_generated + ' 个采样任务', 'success');
+                setTimeout(function(){ window.location.href = '/contracts'; }, 1500);
+            })
+            .catch(function(e) {
+                showToast(e.detail || '生成计划失败', 'error');
+            });
+        } else {
+            window.location.href = '/contracts';
+        }
+    })
+    .catch(function(err) {
+        showToast(err.detail || '录入失败', 'error');
+    });
+}
+</script>
+{% endblock %}

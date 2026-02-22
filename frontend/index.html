@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>水质采样管理系统</title>
+  <link rel="stylesheet" href="/lib/element-plus.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #app { height: 100%; width: 100%; overflow: hidden; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+
+    .app-container { display: flex; height: 100vh; }
+
+    /* Sidebar */
+    .sidebar { height: 100vh; display: flex; flex-direction: column; transition: width 0.3s; background: #304156; }
+    .sidebar.collapsed { width: 64px; }
+    .sidebar:not(.collapsed) { width: 210px; }
+    .sidebar-header { height: 56px; display: flex; align-items: center; justify-content: center; background: #263445; color: #fff; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+    .sidebar-header .logo-icon { font-size: 22px; margin-right: 8px; }
+    .sidebar.collapsed .sidebar-header .logo-text { display: none; }
+    .sidebar.collapsed .sidebar-header .logo-icon { margin-right: 0; }
+    .sidebar .el-menu { border-right: none; flex: 1; overflow-y: auto; }
+    .sidebar .el-menu:not(.el-menu--collapse) { width: 210px; }
+    .collapse-btn { height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #bfcbd9; background: #263445; transition: color 0.2s; }
+    .collapse-btn:hover { color: #409EFF; }
+
+    /* Main area */
+    .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f0f2f5; }
+    .top-header { height: 56px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-shadow: 0 1px 4px rgba(0,21,41,0.08); z-index: 10; }
+    .top-header .left-part { display: flex; align-items: center; gap: 12px; }
+    .top-header .app-title { font-size: 18px; font-weight: 600; color: #303133; }
+    .content-wrapper { flex: 1; padding: 16px 20px; overflow-y: auto; }
+
+    /* Dashboard Cards */
+    .dashboard-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+    .stat-card { text-align: center; padding: 20px; }
+    .stat-card .stat-number { font-size: 36px; font-weight: 700; line-height: 1.2; }
+    .stat-card .stat-label { font-size: 14px; color: #909399; margin-top: 6px; }
+    .stat-total .stat-number { color: #409EFF; }
+    .stat-done .stat-number { color: #67C23A; }
+    .stat-pending .stat-number { color: #E6A23C; }
+    .stat-overdue .stat-number { color: #F56C6C; }
+
+    .section-title { font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 12px; }
+
+    /* Progress overall */
+    .overall-progress { margin-bottom: 24px; background: #fff; padding: 20px; border-radius: 8px; }
+
+    /* Filter bar */
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: center; }
+    .filter-bar .spacer { flex: 1; }
+
+    /* Batch bar */
+    .batch-bar { background: #ecf5ff; border: 1px solid #b3d8ff; border-radius: 4px; padding: 10px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+
+    /* Table wrapper */
+    .table-wrapper { background: #fff; border-radius: 8px; padding: 16px; }
+
+    /* Wizard step content */
+    .step-content { min-height: 300px; padding: 20px 0; }
+
+    /* Plant card in contract wizard */
+    .plant-card { margin-bottom: 16px; }
+    .plant-card .plant-header { display: flex; align-items: center; justify-content: space-between; }
+
+    /* Status bar colors */
+    .status-bar-container { display: flex; height: 24px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+    .status-bar-segment { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; min-width: 30px; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .dashboard-cards { grid-template-columns: repeat(2, 1fr); }
+      .sidebar:not(.collapsed) { position: fixed; z-index: 999; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="app-container">
+      <!-- Sidebar -->
+      <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+        <div class="sidebar-header">
+          <el-icon class="logo-icon"><data-analysis /></el-icon>
+          <span class="logo-text">水质采样系统</span>
+        </div>
+        <el-menu
+          :default-active="activeMenu"
+          :collapse="sidebarCollapsed"
+          background-color="#304156"
+          text-color="#bfcbd9"
+          active-text-color="#409EFF"
+          @select="handleMenuSelect"
+        >
+          <el-menu-item index="dashboard">
+            <el-icon><data-analysis /></el-icon>
+            <template #title>看板</template>
+          </el-menu-item>
+          <el-menu-item index="contracts">
+            <el-icon><document /></el-icon>
+            <template #title>合同管理</template>
+          </el-menu-item>
+          <el-menu-item index="tasks">
+            <el-icon><list /></el-icon>
+            <template #title>采样计划</template>
+          </el-menu-item>
+          <el-menu-item index="companies">
+            <el-icon><office-building /></el-icon>
+            <template #title>公司管理</template>
+          </el-menu-item>
+        </el-menu>
+        <div class="collapse-btn" @click="sidebarCollapsed = !sidebarCollapsed">
+          <el-icon v-if="sidebarCollapsed"><expand /></el-icon>
+          <el-icon v-else><fold /></el-icon>
+        </div>
+      </div>
+
+      <!-- Main -->
+      <div class="main-area">
+        <div class="top-header">
+          <div class="left-part">
+            <span class="app-title">水质采样管理系统</span>
+            <el-breadcrumb separator="/">
+              <el-breadcrumb-item>首页</el-breadcrumb-item>
+              <el-breadcrumb-item>{{ menuTitleMap[activeMenu] }}</el-breadcrumb-item>
+            </el-breadcrumb>
+          </div>
+          <div>
+            <el-tag type="info">{{ currentDateStr }}</el-tag>
+          </div>
+        </div>
+
+        <div class="content-wrapper">
+
+          <!-- ==================== DASHBOARD ==================== -->
+          <div v-if="activeMenu === 'dashboard'">
+            <div class="filter-bar">
+              <el-select v-model="dash.year" placeholder="选择年度" style="width: 120px;" @change="loadDashboard">
+                <el-option v-for="y in yearOptions" :key="y" :label="y + '年'" :value="y"></el-option>
+              </el-select>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="dashboard-cards">
+              <el-card class="stat-card stat-total" shadow="hover">
+                <div class="stat-number">{{ dash.summary.total_tasks || 0 }}</div>
+                <div class="stat-label">总任务数</div>
+              </el-card>
+              <el-card class="stat-card stat-done" shadow="hover">
+                <div class="stat-number">{{ dash.summary.completed || 0 }}</div>
+                <div class="stat-label">已完成</div>
+              </el-card>
+              <el-card class="stat-card stat-pending" shadow="hover">
+                <div class="stat-number">{{ dash.summary.pending || 0 }}</div>
+                <div class="stat-label">待采样</div>
+              </el-card>
+              <el-card class="stat-card stat-overdue" shadow="hover">
+                <div class="stat-number">{{ dash.summary.overdue || 0 }}</div>
+                <div class="stat-label">逾期</div>
+              </el-card>
+            </div>
+
+            <!-- Overall progress -->
+            <div class="overall-progress">
+              <div class="section-title">总体完成进度</div>
+              <el-progress
+                :percentage="dash.overallPercent"
+                :stroke-width="20"
+                :text-inside="true"
+                striped
+                striped-flow
+              ></el-progress>
+            </div>
+
+            <!-- Status breakdown -->
+            <el-card style="margin-bottom: 20px;">
+              <template #header><span class="section-title" style="margin-bottom:0">状态分布</span></template>
+              <div class="status-bar-container" style="height: 36px; margin-bottom: 16px;">
+                <div class="status-bar-segment" style="background:#909399;" :style="{ width: dash.statusPercent.pending + '%' }" v-if="dash.statusPercent.pending > 0">
+                  待采样 {{ dash.summary.pending || 0 }}
+                </div>
+                <div class="status-bar-segment" style="background:#E6A23C;" :style="{ width: dash.statusPercent.sampled + '%' }" v-if="dash.statusPercent.sampled > 0">
+                  已采样 {{ dash.summary.sampled || 0 }}
+                </div>
+                <div class="status-bar-segment" style="background:#409EFF;" :style="{ width: dash.statusPercent.submitted + '%' }" v-if="dash.statusPercent.submitted > 0">
+                  已送检 {{ dash.summary.submitted || 0 }}
+                </div>
+                <div class="status-bar-segment" style="background:#67C23A;" :style="{ width: dash.statusPercent.completed + '%' }" v-if="dash.statusPercent.completed > 0">
+                  已出报告 {{ dash.summary.completed || 0 }}
+                </div>
+              </div>
+              <div style="display:flex; gap: 20px; flex-wrap: wrap;">
+                <el-tag type="info">待采样: {{ dash.summary.pending || 0 }}</el-tag>
+                <el-tag type="warning">已采样: {{ dash.summary.sampled || 0 }}</el-tag>
+                <el-tag type="primary">已送检: {{ dash.summary.submitted || 0 }}</el-tag>
+                <el-tag type="success">已出报告: {{ dash.summary.completed || 0 }}</el-tag>
+              </div>
+            </el-card>
+
+            <!-- Per-company progress -->
+            <el-card>
+              <template #header><span class="section-title" style="margin-bottom:0">各公司完成进度</span></template>
+              <el-table :data="dash.companyProgress" v-loading="dash.loading" stripe>
+                <el-table-column prop="company_name" label="公司名称" min-width="160"></el-table-column>
+                <el-table-column prop="total" label="总任务数" width="100" align="center"></el-table-column>
+                <el-table-column prop="completed" label="已完成" width="100" align="center"></el-table-column>
+                <el-table-column label="完成率" min-width="200">
+                  <template #default="{ row }">
+                    <el-progress :percentage="row.rate" :color="row.rate >= 80 ? '#67C23A' : row.rate >= 50 ? '#E6A23C' : '#F56C6C'"></el-progress>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+          </div>
+
+          <!-- ==================== CONTRACT MANAGEMENT ==================== -->
+          <div v-if="activeMenu === 'contracts'">
+            <div class="filter-bar">
+              <el-select v-model="contract.filterCompany" placeholder="全部公司" clearable style="width: 180px;" @change="loadContracts">
+                <el-option v-for="c in companyList" :key="c.id" :label="c.name" :value="c.id"></el-option>
+              </el-select>
+              <el-select v-model="contract.filterYear" placeholder="全部年度" clearable style="width: 120px;" @change="loadContracts">
+                <el-option v-for="y in yearOptions" :key="y" :label="y + '年'" :value="y"></el-option>
+              </el-select>
+              <div class="spacer"></div>
+              <el-button type="primary" @click="openContractDialog(null)">
+                <el-icon><plus /></el-icon> 新增合同
+              </el-button>
+              <el-button @click="contract.importVisible = true">
+                <el-icon><upload /></el-icon> Excel导入
+              </el-button>
+            </div>
+
+            <div class="table-wrapper">
+              <el-table :data="contract.list" v-loading="contract.loading" stripe row-key="id">
+                <el-table-column type="expand">
+                  <template #default="{ row }">
+                    <div style="padding: 12px 20px;">
+                      <div v-if="row._plantsLoading" v-loading="true" style="min-height: 60px;"></div>
+                      <div v-else-if="row._plants && row._plants.length > 0">
+                        <div v-for="plant in row._plants" :key="plant.id" style="margin-bottom: 16px;">
+                          <el-descriptions :title="'水厂: ' + plant.name" :column="3" border size="small">
+                            <el-descriptions-item label="规模">{{ plant.scale || '-' }}</el-descriptions-item>
+                            <el-descriptions-item label="采样点">
+                              <el-tag v-for="sp in (plant.sampling_points || [])" :key="sp" size="small" style="margin-right:4px;">{{ sp }}</el-tag>
+                              <span v-if="!plant.sampling_points || plant.sampling_points.length === 0">-</span>
+                            </el-descriptions-item>
+                          </el-descriptions>
+                          <el-table :data="plant._items || []" size="small" stripe style="margin-top: 8px;" v-loading="plant._itemsLoading">
+                            <el-table-column prop="sample_category" label="样品类别" width="120"></el-table-column>
+                            <el-table-column prop="detection_name" label="检测项目" min-width="140"></el-table-column>
+                            <el-table-column prop="detection_standard" label="检测标准" min-width="140"></el-table-column>
+                            <el-table-column prop="frequency_type" label="频率类型" width="100">
+                              <template #default="{ row: item }">{{ freqTypeMap[item.frequency_type] || item.frequency_type }}</template>
+                            </el-table-column>
+                            <el-table-column prop="frequency_value" label="频率值" width="80" align="center"></el-table-column>
+                            <el-table-column prop="unit_price" label="单价(元)" width="100" align="right"></el-table-column>
+                            <el-table-column prop="annual_count" label="年检测次数" width="100" align="center"></el-table-column>
+                            <el-table-column prop="subtotal" label="小计(元)" width="100" align="right"></el-table-column>
+                          </el-table>
+                        </div>
+                      </div>
+                      <el-empty v-else description="暂无水厂数据" :image-size="60"></el-empty>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="contract_no" label="合同编号" min-width="150"></el-table-column>
+                <el-table-column prop="company_name" label="所属公司" min-width="150">
+                  <template #default="{ row }">{{ getCompanyName(row.company_id) || row.company_name || '-' }}</template>
+                </el-table-column>
+                <el-table-column prop="year" label="年度" width="80" align="center"></el-table-column>
+                <el-table-column label="有效期" min-width="200">
+                  <template #default="{ row }">{{ row.start_date || '-' }} ~ {{ row.end_date || '-' }}</template>
+                </el-table-column>
+                <el-table-column prop="total_amount" label="总金额(万元)" width="130" align="right">
+                  <template #default="{ row }">{{ row.total_amount != null ? Number(row.total_amount).toFixed(2) : '-' }}</template>
+                </el-table-column>
+                <el-table-column label="操作" width="280" fixed="right">
+                  <template #default="{ row }">
+                    <el-button size="small" @click="expandContractDetail(row)">查看</el-button>
+                    <el-button size="small" type="primary" @click="openContractDialog(row)">编辑</el-button>
+                    <el-popconfirm title="确定要删除此合同吗?" @confirm="deleteContract(row.id)">
+                      <template #reference>
+                        <el-button size="small" type="danger">删除</el-button>
+                      </template>
+                    </el-popconfirm>
+                    <el-button size="small" type="success" @click="generatePlan(row.id)">生成计划</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+
+            <!-- Contract Wizard Dialog -->
+            <el-dialog
+              v-model="contract.dialogVisible"
+              :title="contract.editingId ? '编辑合同' : '新增合同'"
+              width="860px"
+              :close-on-click-modal="false"
+              destroy-on-close
+            >
+              <el-steps :active="contract.wizardStep" finish-status="success" align-center style="margin-bottom: 20px;">
+                <el-step title="基本信息"></el-step>
+                <el-step title="水厂信息"></el-step>
+                <el-step title="检测项目"></el-step>
+              </el-steps>
+
+              <!-- Step 1: Basic Info -->
+              <div v-show="contract.wizardStep === 0" class="step-content">
+                <el-form ref="contractFormRef" :model="contract.form" :rules="contractRules" label-width="100px">
+                  <el-form-item label="所属公司" prop="company_id">
+                    <el-select v-model="contract.form.company_id" placeholder="请选择公司" style="width: 100%;">
+                      <el-option v-for="c in companyList" :key="c.id" :label="c.name" :value="c.id"></el-option>
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="合同编号" prop="contract_no">
+                    <el-input v-model="contract.form.contract_no" placeholder="请输入合同编号"></el-input>
+                  </el-form-item>
+                  <el-form-item label="年度" prop="year">
+                    <el-select v-model="contract.form.year" placeholder="请选择年度" style="width: 100%;">
+                      <el-option v-for="y in yearOptions" :key="y" :label="y + '年'" :value="y"></el-option>
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="开始日期" prop="start_date">
+                    <el-date-picker v-model="contract.form.start_date" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" style="width: 100%;"></el-date-picker>
+                  </el-form-item>
+                  <el-form-item label="结束日期" prop="end_date">
+                    <el-date-picker v-model="contract.form.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" style="width: 100%;"></el-date-picker>
+                  </el-form-item>
+                  <el-form-item label="总金额(万元)" prop="total_amount">
+                    <el-input-number v-model="contract.form.total_amount" :precision="2" :step="1" :min="0" style="width: 100%;"></el-input-number>
+                  </el-form-item>
+                  <el-form-item label="备注">
+                    <el-input v-model="contract.form.remark" type="textarea" :rows="3" placeholder="备注信息"></el-input>
+                  </el-form-item>
+                </el-form>
+              </div>
+
+              <!-- Step 2: Water Plants -->
+              <div v-show="contract.wizardStep === 1" class="step-content">
+                <el-button type="primary" size="small" @click="addWizardPlant" style="margin-bottom: 12px;">
+                  <el-icon><plus /></el-icon> 添加水厂
+                </el-button>
+                <el-card v-for="(plant, pi) in contract.plants" :key="pi" class="plant-card" shadow="hover">
+                  <template #header>
+                    <div class="plant-header">
+                      <span>水厂 #{{ pi + 1 }}</span>
+                      <el-button type="danger" size="small" text @click="contract.plants.splice(pi, 1)">
+                        <el-icon><delete /></el-icon> 删除
+                      </el-button>
+                    </div>
+                  </template>
+                  <el-form label-width="80px">
+                    <el-form-item label="名称">
+                      <el-input v-model="plant.name" placeholder="水厂名称"></el-input>
+                    </el-form-item>
+                    <el-form-item label="规模">
+                      <el-input v-model="plant.scale" placeholder="如: 10万吨/日"></el-input>
+                    </el-form-item>
+                    <el-form-item label="采样点">
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items: center;">
+                        <el-tag
+                          v-for="(tag, ti) in plant.sampling_points"
+                          :key="ti"
+                          closable
+                          @close="plant.sampling_points.splice(ti, 1)"
+                        >{{ tag }}</el-tag>
+                        <el-input
+                          v-if="plant._inputVisible"
+                          ref="plantTagInputRef"
+                          v-model="plant._inputValue"
+                          size="small"
+                          style="width: 120px;"
+                          @keyup.enter="confirmPlantTag(plant)"
+                          @blur="confirmPlantTag(plant)"
+                        ></el-input>
+                        <el-button v-else size="small" @click="plant._inputVisible = true">+ 添加</el-button>
+                      </div>
+                    </el-form-item>
+                  </el-form>
+                </el-card>
+                <el-empty v-if="contract.plants.length === 0" description="请添加水厂"></el-empty>
+              </div>
+
+              <!-- Step 3: Detection Items -->
+              <div v-show="contract.wizardStep === 2" class="step-content">
+                <div v-if="contract.plants.length === 0">
+                  <el-empty description="请先在上一步添加水厂"></el-empty>
+                </div>
+                <el-collapse v-else v-model="contract.activeDetectionPlant">
+                  <el-collapse-item v-for="(plant, pi) in contract.plants" :key="pi" :title="plant.name || ('水厂 #' + (pi + 1))" :name="pi">
+                    <el-button type="primary" size="small" @click="addDetectionItem(pi)" style="margin-bottom: 8px;">
+                      <el-icon><plus /></el-icon> 添加检测项
+                    </el-button>
+                    <el-table :data="plant.detection_items" size="small" stripe border>
+                      <el-table-column prop="sample_category" label="样品类别" width="120">
+                        <template #default="{ row }">
+                          <el-input v-model="row.sample_category" size="small" placeholder="如: 出厂水"></el-input>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="detection_name" label="检测项目" min-width="130">
+                        <template #default="{ row }">
+                          <el-input v-model="row.detection_name" size="small" placeholder="检测项目名"></el-input>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="detection_standard" label="检测标准" min-width="130">
+                        <template #default="{ row }">
+                          <el-input v-model="row.detection_standard" size="small" placeholder="检测标准"></el-input>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="frequency_type" label="频率类型" width="110">
+                        <template #default="{ row }">
+                          <el-select v-model="row.frequency_type" size="small">
+                            <el-option label="月" value="月"></el-option>
+                            <el-option label="季" value="季"></el-option>
+                            <el-option label="半年" value="半年"></el-option>
+                            <el-option label="年" value="年"></el-option>
+                          </el-select>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="frequency_value" label="频率值" width="80">
+                        <template #default="{ row }">
+                          <el-input-number v-model="row.frequency_value" size="small" :min="1" controls-position="right" style="width:70px;"></el-input-number>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="unit_price" label="单价(元)" width="100">
+                        <template #default="{ row }">
+                          <el-input-number v-model="row.unit_price" size="small" :min="0" :precision="2" controls-position="right" style="width:90px;"></el-input-number>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="annual_count" label="年检测次数" width="100">
+                        <template #default="{ row }">
+                          <el-input-number v-model="row.annual_count" size="small" :min="1" controls-position="right" style="width:90px;"></el-input-number>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="小计(元)" width="100">
+                        <template #default="{ row }">
+                          {{ ((row.unit_price || 0) * (row.annual_count || 0)).toFixed(2) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="操作" width="60">
+                        <template #default="{ $index }">
+                          <el-button type="danger" size="small" text @click="plant.detection_items.splice($index, 1)">
+                            <el-icon><delete /></el-icon>
+                          </el-button>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </el-collapse-item>
+                </el-collapse>
+              </div>
+
+              <template #footer>
+                <el-button @click="contract.dialogVisible = false">取消</el-button>
+                <el-button v-if="contract.wizardStep > 0" @click="contract.wizardStep--">上一步</el-button>
+                <el-button v-if="contract.wizardStep < 2" type="primary" @click="nextContractStep">下一步</el-button>
+                <el-button v-if="contract.wizardStep === 2" type="primary" @click="saveContract" :loading="contract.saving">保存合同</el-button>
+              </template>
+            </el-dialog>
+
+            <!-- Excel Import Dialog -->
+            <el-dialog v-model="contract.importVisible" title="Excel导入" width="520px" destroy-on-close>
+              <el-form label-width="100px">
+                <el-form-item label="所属公司">
+                  <el-select v-model="contract.importForm.company_id" placeholder="请选择公司" style="width: 100%;">
+                    <el-option v-for="c in companyList" :key="c.id" :label="c.name" :value="c.id"></el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="合同编号">
+                  <el-input v-model="contract.importForm.contract_no" placeholder="请输入合同编号"></el-input>
+                </el-form-item>
+                <el-form-item label="年度">
+                  <el-select v-model="contract.importForm.year" placeholder="请选择年度" style="width: 100%;">
+                    <el-option v-for="y in yearOptions" :key="y" :label="y + '年'" :value="y"></el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="上传文件">
+                  <el-upload
+                    ref="importUploadRef"
+                    action=""
+                    :auto-upload="false"
+                    :limit="1"
+                    accept=".xlsx,.xls"
+                    :on-change="handleImportFileChange"
+                  >
+                    <el-button type="primary"><el-icon><upload /></el-icon> 选择Excel文件</el-button>
+                  </el-upload>
+                </el-form-item>
+                <el-form-item>
+                  <el-button type="text" @click="downloadTemplate">下载导入模板</el-button>
+                </el-form-item>
+              </el-form>
+              <template #footer>
+                <el-button @click="contract.importVisible = false">取消</el-button>
+                <el-button type="primary" @click="doImportExcel" :loading="contract.importing">导入</el-button>
+              </template>
+            </el-dialog>
+          </div>
+
+          <!-- ==================== TASK LIST ==================== -->
+          <div v-if="activeMenu === 'tasks'">
+            <div class="filter-bar">
+              <el-select v-model="task.filterYear" placeholder="年度" style="width: 100px;" @change="loadTasks">
+                <el-option v-for="y in yearOptions" :key="y" :label="y + '年'" :value="y"></el-option>
+              </el-select>
+              <el-select v-model="task.filterMonth" placeholder="月份" clearable style="width: 100px;" @change="loadTasks">
+                <el-option label="全部" :value="null"></el-option>
+                <el-option v-for="m in 12" :key="m" :label="m + '月'" :value="m"></el-option>
+              </el-select>
+              <el-select v-model="task.filterCompany" placeholder="全部公司" clearable style="width: 160px;" @change="loadTasks">
+                <el-option v-for="c in companyList" :key="c.id" :label="c.name" :value="c.id"></el-option>
+              </el-select>
+              <el-select v-model="task.filterStatus" placeholder="全部状态" clearable style="width: 120px;" @change="loadTasks">
+                <el-option label="全部" :value="null"></el-option>
+                <el-option label="待采样" value="待采样"></el-option>
+                <el-option label="已采样" value="已采样"></el-option>
+                <el-option label="已送检" value="已送检"></el-option>
+                <el-option label="已出报告" value="已出报告"></el-option>
+              </el-select>
+              <el-select v-model="task.filterSource" placeholder="全部来源" clearable style="width: 120px;" @change="loadTasks">
+                <el-option label="全部" :value="null"></el-option>
+                <el-option label="合同任务" value="合同任务"></el-option>
+                <el-option label="临时任务" value="临时任务"></el-option>
+              </el-select>
+              <div class="spacer"></div>
+              <el-button type="primary" @click="openTaskDialog(null)">
+                <el-icon><plus /></el-icon> 新增临时任务
+              </el-button>
+            </div>
+
+            <!-- Batch bar -->
+            <div v-if="task.selectedRows.length > 0" class="batch-bar">
+              <span>已选择 <strong>{{ task.selectedRows.length }}</strong> 条任务</span>
+              <el-select v-model="task.batchStatus" placeholder="批量修改状态" size="small" style="width: 140px;">
+                <el-option label="待采样" value="待采样"></el-option>
+                <el-option label="已采样" value="已采样"></el-option>
+                <el-option label="已送检" value="已送检"></el-option>
+                <el-option label="已出报告" value="已出报告"></el-option>
+              </el-select>
+              <el-button type="primary" size="small" @click="batchUpdateStatus" :disabled="!task.batchStatus">确认修改</el-button>
+            </div>
+
+            <div class="table-wrapper">
+              <el-table
+                :data="task.list"
+                v-loading="task.loading"
+                stripe
+                @selection-change="handleTaskSelectionChange"
+                row-key="id"
+              >
+                <el-table-column type="selection" width="45"></el-table-column>
+                <el-table-column prop="month" label="月份" width="70" align="center">
+                  <template #default="{ row }">{{ row.month || '-' }}月</template>
+                </el-table-column>
+                <el-table-column prop="company_name" label="所属公司" min-width="120">
+                  <template #default="{ row }">{{ row.company_name || getCompanyName(row.company_id) || '-' }}</template>
+                </el-table-column>
+                <el-table-column prop="water_plant_name" label="水厂" min-width="120"></el-table-column>
+                <el-table-column prop="sample_category" label="样品类别" width="100"></el-table-column>
+                <el-table-column prop="detection_name" label="检测项目" min-width="130"></el-table-column>
+                <el-table-column prop="planned_date" label="计划日期" width="110"></el-table-column>
+                <el-table-column prop="status" label="状态" width="100" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="statusTagType(row.status)" size="small">{{ row.status }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="executor" label="执行人" width="90"></el-table-column>
+                <el-table-column prop="source" label="来源" width="90">
+                  <template #default="{ row }">
+                    <el-tag :type="row.source === '临时任务' ? 'warning' : ''" size="small" effect="plain">{{ row.source || '合同任务' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="150" fixed="right">
+                  <template #default="{ row }">
+                    <el-button size="small" type="primary" @click="openTaskDetail(row)">编辑</el-button>
+                    <el-popconfirm title="确定要删除此任务吗?" @confirm="deleteTask(row.id)">
+                      <template #reference>
+                        <el-button size="small" type="danger">删除</el-button>
+                      </template>
+                    </el-popconfirm>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+                <el-pagination
+                  v-model:current-page="task.page"
+                  v-model:page-size="task.pageSize"
+                  :page-sizes="[20, 50, 100]"
+                  :total="task.total"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  @size-change="loadTasks"
+                  @current-change="loadTasks"
+                ></el-pagination>
+              </div>
+            </div>
+
+            <!-- Task Detail / Edit Dialog -->
+            <el-dialog v-model="task.detailVisible" title="任务详情" width="560px" destroy-on-close>
+              <el-form :model="task.detailForm" label-width="100px">
+                <el-form-item label="水厂">
+                  <el-input v-model="task.detailForm.water_plant_name" disabled></el-input>
+                </el-form-item>
+                <el-form-item label="检测项目">
+                  <el-input v-model="task.detailForm.detection_name" disabled></el-input>
+                </el-form-item>
+                <el-form-item label="状态">
+                  <el-select v-model="task.detailForm.status" style="width: 100%;">
+                    <el-option label="待采样" value="待采样"></el-option>
+                    <el-option label="已采样" value="已采样"></el-option>
+                    <el-option label="已送检" value="已送检"></el-option>
+                    <el-option label="已出报告" value="已出报告"></el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="计划日期">
+                  <el-date-picker v-model="task.detailForm.planned_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;"></el-date-picker>
+                </el-form-item>
+                <el-form-item label="实际日期">
+                  <el-date-picker v-model="task.detailForm.actual_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;"></el-date-picker>
+                </el-form-item>
+                <el-form-item label="执行人">
+                  <el-input v-model="task.detailForm.executor" placeholder="执行人姓名"></el-input>
+                </el-form-item>
+                <el-form-item label="备注">
+                  <el-input v-model="task.detailForm.notes" type="textarea" :rows="3" placeholder="备注"></el-input>
+                </el-form-item>
+              </el-form>
+              <template #footer>
+                <el-button @click="task.detailVisible = false">取消</el-button>
+                <el-button type="primary" @click="saveTaskDetail" :loading="task.detailSaving">保存</el-button>
+              </template>
+            </el-dialog>
+
+            <!-- Add Temp Task Dialog -->
+            <el-dialog v-model="task.addVisible" title="新增临时任务" width="560px" destroy-on-close>
+              <el-form ref="taskFormRef" :model="task.addForm" :rules="taskRules" label-width="100px">
+                <el-form-item label="所属公司" prop="company_id">
+                  <el-select v-model="task.addForm.company_id" placeholder="请选择公司" style="width: 100%;">
+                    <el-option v-for="c in companyList" :key="c.id" :label="c.name" :value="c.id"></el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="水厂名称" prop="water_plant_name">
+                  <el-input v-model="task.addForm.water_plant_name" placeholder="水厂名称"></el-input>
+                </el-form-item>
+                <el-form-item label="样品类别" prop="sample_category">
+                  <el-input v-model="task.addForm.sample_category" placeholder="如: 出厂水"></el-input>
+                </el-form-item>
+                <el-form-item label="检测项目" prop="detection_name">
+                  <el-input v-model="task.addForm.detection_name" placeholder="检测项目名称"></el-input>
+                </el-form-item>
+                <el-form-item label="检测标准">
+                  <el-input v-model="task.addForm.detection_standard" placeholder="检测标准"></el-input>
+                </el-form-item>
+                <el-form-item label="计划年份" prop="year">
+                  <el-select v-model="task.addForm.year" placeholder="选择年份" style="width: 100%;">
+                    <el-option v-for="y in yearOptions" :key="y" :label="y + '年'" :value="y"></el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="计划月份" prop="month">
+                  <el-select v-model="task.addForm.month" placeholder="选择月份" style="width: 100%;">
+                    <el-option v-for="m in 12" :key="m" :label="m + '月'" :value="m"></el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="计划日期">
+                  <el-date-picker v-model="task.addForm.planned_date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%;"></el-date-picker>
+                </el-form-item>
+                <el-form-item label="备注">
+                  <el-input v-model="task.addForm.notes" type="textarea" :rows="3" placeholder="备注"></el-input>
+                </el-form-item>
+              </el-form>
+              <template #footer>
+                <el-button @click="task.addVisible = false">取消</el-button>
+                <el-button type="primary" @click="saveNewTask" :loading="task.addSaving">保存</el-button>
+              </template>
+            </el-dialog>
+          </div>
+
+          <!-- ==================== COMPANY MANAGEMENT ==================== -->
+          <div v-if="activeMenu === 'companies'">
+            <div class="filter-bar">
+              <div class="spacer"></div>
+              <el-button type="primary" @click="openCompanyDialog(null)">
+                <el-icon><plus /></el-icon> 新增公司
+              </el-button>
+            </div>
+
+            <div class="table-wrapper">
+              <el-table :data="company.list" v-loading="company.loading" stripe>
+                <el-table-column prop="name" label="公司名称" min-width="180"></el-table-column>
+                <el-table-column prop="group_name" label="所属集团" min-width="150"></el-table-column>
+                <el-table-column prop="address" label="地址" min-width="200"></el-table-column>
+                <el-table-column prop="contact_person" label="联系人" width="100"></el-table-column>
+                <el-table-column prop="contact_phone" label="联系电话" width="130"></el-table-column>
+                <el-table-column label="操作" width="160" fixed="right">
+                  <template #default="{ row }">
+                    <el-button size="small" type="primary" @click="openCompanyDialog(row)">编辑</el-button>
+                    <el-popconfirm title="确定要删除此公司吗?" @confirm="deleteCompany(row.id)">
+                      <template #reference>
+                        <el-button size="small" type="danger">删除</el-button>
+                      </template>
+                    </el-popconfirm>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+
+            <!-- Company Add/Edit Dialog -->
+            <el-dialog
+              v-model="company.dialogVisible"
+              :title="company.editingId ? '编辑公司' : '新增公司'"
+              width="520px"
+              destroy-on-close
+            >
+              <el-form ref="companyFormRef" :model="company.form" :rules="companyRules" label-width="100px">
+                <el-form-item label="公司名称" prop="name">
+                  <el-input v-model="company.form.name" placeholder="请输入公司名称"></el-input>
+                </el-form-item>
+                <el-form-item label="所属集团" prop="group_name">
+                  <el-input v-model="company.form.group_name" placeholder="请输入所属集团"></el-input>
+                </el-form-item>
+                <el-form-item label="地址">
+                  <el-input v-model="company.form.address" placeholder="请输入地址"></el-input>
+                </el-form-item>
+                <el-form-item label="联系人">
+                  <el-input v-model="company.form.contact_person" placeholder="请输入联系人"></el-input>
+                </el-form-item>
+                <el-form-item label="联系电话">
+                  <el-input v-model="company.form.contact_phone" placeholder="请输入联系电话"></el-input>
+                </el-form-item>
+              </el-form>
+              <template #footer>
+                <el-button @click="company.dialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="saveCompany" :loading="company.saving">保存</el-button>
+              </template>
+            </el-dialog>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Local Scripts -->
+  <script src="/lib/vue.global.prod.js"></script>
+  <script src="/lib/element-plus.js"></script>
+  <script src="/lib/icons-vue.js"></script>
+  <script src="/lib/zh-cn.min.js"></script>
+
+  <script>
+    const { createApp, ref, reactive, computed, onMounted, watch, nextTick, toRaw } = Vue;
+
+    const app = createApp({
+      setup() {
+        // ====== Shared State ======
+        const activeMenu = ref('dashboard');
+        const sidebarCollapsed = ref(false);
+        const companyList = ref([]);
+        const currentYear = new Date().getFullYear();
+        const currentDateStr = computed(() => {
+          const d = new Date();
+          return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        });
+        const yearOptions = computed(() => {
+          const years = [];
+          for (let y = currentYear - 2; y <= currentYear + 2; y++) years.push(y);
+          return years;
+        });
+
+        const menuTitleMap = {
+          dashboard: '看板',
+          contracts: '合同管理',
+          tasks: '采样计划',
+          companies: '公司管理'
+        };
+
+        const freqTypeMap = { '月': '月', '季': '季度', '半年': '半年', '年': '年' };
+
+        // Refs for form validation
+        const contractFormRef = ref(null);
+        const companyFormRef = ref(null);
+        const taskFormRef = ref(null);
+        const importUploadRef = ref(null);
+
+        // ====== Helper: API fetch ======
+        async function apiFetch(url, options = {}) {
+          try {
+            const res = await fetch(url, {
+              headers: { 'Content-Type': 'application/json', ...options.headers },
+              ...options
+            });
+            if (!res.ok) {
+              let errMsg = '请求失败 (' + res.status + ')';
+              try {
+                const errBody = await res.json();
+                if (errBody.detail) errMsg = typeof errBody.detail === 'string' ? errBody.detail : JSON.stringify(errBody.detail);
+                else if (errBody.message) errMsg = errBody.message;
+              } catch (e) {}
+              throw new Error(errMsg);
+            }
+            if (res.status === 204) return null;
+            return await res.json();
+          } catch (err) {
+            ElementPlus.ElMessage.error(err.message || '网络错误');
+            throw err;
+          }
+        }
+
+        function getCompanyName(id) {
+          const c = companyList.value.find(x => x.id === id);
+          return c ? c.name : '';
+        }
+
+        function statusTagType(status) {
+          const map = { '待采样': 'info', '已采样': 'warning', '已送检': '', '已出报告': 'success' };
+          return map[status] || 'info';
+        }
+
+        // ====== Load companies (shared) ======
+        async function loadCompanies() {
+          try {
+            const data = await apiFetch('/api/companies');
+            companyList.value = Array.isArray(data) ? data : (data.items || data.data || []);
+          } catch (e) {}
+        }
+
+        // ====== DASHBOARD ======
+        const dash = reactive({
+          year: currentYear,
+          loading: false,
+          summary: {},
+          companyProgress: [],
+          overallPercent: 0,
+          statusPercent: { pending: 0, sampled: 0, submitted: 0, completed: 0 }
+        });
+
+        async function loadDashboard() {
+          dash.loading = true;
+          try {
+            const data = await apiFetch('/api/dashboard/summary?year=' + dash.year);
+            dash.summary = data || {};
+            const total = dash.summary.total_tasks || 0;
+            const completed = dash.summary.completed || 0;
+            dash.overallPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            const pending = dash.summary.pending || 0;
+            const sampled = dash.summary.sampled || 0;
+            const submitted = dash.summary.submitted || 0;
+            if (total > 0) {
+              dash.statusPercent.pending = Math.round((pending / total) * 100);
+              dash.statusPercent.sampled = Math.round((sampled / total) * 100);
+              dash.statusPercent.submitted = Math.round((submitted / total) * 100);
+              dash.statusPercent.completed = Math.round((completed / total) * 100);
+            } else {
+              dash.statusPercent = { pending: 0, sampled: 0, submitted: 0, completed: 0 };
+            }
+
+            const progressList = dash.summary.company_progress || dash.summary.companies || [];
+            dash.companyProgress = progressList.map(item => ({
+              ...item,
+              rate: item.total > 0 ? Math.round((item.completed / item.total) * 100) : 0
+            }));
+          } catch (e) {
+            dash.summary = {};
+            dash.companyProgress = [];
+            dash.overallPercent = 0;
+          }
+          dash.loading = false;
+        }
+
+        // ====== CONTRACTS ======
+        const contract = reactive({
+          list: [],
+          loading: false,
+          filterCompany: null,
+          filterYear: null,
+          dialogVisible: false,
+          editingId: null,
+          wizardStep: 0,
+          form: {
+            company_id: null,
+            contract_no: '',
+            year: currentYear,
+            start_date: '',
+            end_date: '',
+            total_amount: 0,
+            remark: ''
+          },
+          plants: [],
+          activeDetectionPlant: [0],
+          saving: false,
+          importVisible: false,
+          importing: false,
+          importForm: {
+            company_id: null,
+            contract_no: '',
+            year: currentYear
+          },
+          importFile: null
+        });
+
+        const contractRules = {
+          company_id: [{ required: true, message: '请选择公司', trigger: 'change' }],
+          contract_no: [{ required: true, message: '请输入合同编号', trigger: 'blur' }],
+          year: [{ required: true, message: '请选择年度', trigger: 'change' }],
+          start_date: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
+          end_date: [{ required: true, message: '请选择结束日期', trigger: 'change' }]
+        };
+
+        async function loadContracts() {
+          contract.loading = true;
+          try {
+            let url = '/api/contracts?';
+            if (contract.filterCompany) url += 'company_id=' + contract.filterCompany + '&';
+            if (contract.filterYear) url += 'year=' + contract.filterYear + '&';
+            const data = await apiFetch(url);
+            contract.list = (Array.isArray(data) ? data : (data.items || data.data || [])).map(item => ({
+              ...item,
+              _plants: null,
+              _plantsLoading: false
+            }));
+          } catch (e) {
+            contract.list = [];
+          }
+          contract.loading = false;
+        }
+
+        function openContractDialog(row) {
+          contract.wizardStep = 0;
+          if (row) {
+            contract.editingId = row.id;
+            contract.form = {
+              company_id: row.company_id,
+              contract_no: row.contract_no,
+              year: row.year,
+              start_date: row.start_date,
+              end_date: row.end_date,
+              total_amount: row.total_amount,
+              remark: row.remark || ''
+            };
+            contract.plants = [];
+            loadContractPlantsForEdit(row.id);
+          } else {
+            contract.editingId = null;
+            contract.form = {
+              company_id: null,
+              contract_no: '',
+              year: currentYear,
+              start_date: '',
+              end_date: '',
+              total_amount: 0,
+              remark: ''
+            };
+            contract.plants = [];
+          }
+          contract.dialogVisible = true;
+        }
+
+        async function loadContractPlantsForEdit(contractId) {
+          try {
+            const plantsData = await apiFetch('/api/water-plants?contract_id=' + contractId);
+            const plants = Array.isArray(plantsData) ? plantsData : (plantsData.items || plantsData.data || []);
+            for (const p of plants) {
+              const itemsData = await apiFetch('/api/detection-items?water_plant_id=' + p.id);
+              p.detection_items = Array.isArray(itemsData) ? itemsData : (itemsData.items || itemsData.data || []);
+              p.sampling_points = p.sampling_points || [];
+              p._inputVisible = false;
+              p._inputValue = '';
+            }
+            contract.plants = plants;
+          } catch (e) {
+            contract.plants = [];
+          }
+        }
+
+        async function nextContractStep() {
+          if (contract.wizardStep === 0) {
+            if (contractFormRef.value) {
+              try {
+                await contractFormRef.value.validate();
+              } catch (e) {
+                return;
+              }
+            }
+          }
+          if (contract.wizardStep === 1) {
+            if (contract.plants.length === 0) {
+              ElementPlus.ElMessage.warning('请至少添加一个水厂');
+              return;
+            }
+            for (const p of contract.plants) {
+              if (!p.name || p.name.trim() === '') {
+                ElementPlus.ElMessage.warning('请填写所有水厂的名称');
+                return;
+              }
+            }
+          }
+          contract.wizardStep++;
+        }
+
+        function addWizardPlant() {
+          contract.plants.push({
+            name: '',
+            scale: '',
+            sampling_points: [],
+            detection_items: [],
+            _inputVisible: false,
+            _inputValue: ''
+          });
+        }
+
+        function confirmPlantTag(plant) {
+          if (plant._inputValue && plant._inputValue.trim()) {
+            if (!plant.sampling_points) plant.sampling_points = [];
+            plant.sampling_points.push(plant._inputValue.trim());
+          }
+          plant._inputVisible = false;
+          plant._inputValue = '';
+        }
+
+        function addDetectionItem(plantIndex) {
+          contract.plants[plantIndex].detection_items.push({
+            sample_category: '',
+            detection_name: '',
+            detection_standard: '',
+            frequency_type: '月',
+            frequency_value: 1,
+            unit_price: 0,
+            annual_count: 12
+          });
+        }
+
+        async function saveContract() {
+          contract.saving = true;
+          try {
+            const payload = { ...contract.form };
+            let contractId;
+
+            if (contract.editingId) {
+              const updated = await apiFetch('/api/contracts/' + contract.editingId, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+              });
+              contractId = contract.editingId;
+            } else {
+              const created = await apiFetch('/api/contracts', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+              });
+              contractId = created.id;
+            }
+
+            // Save water plants and detection items
+            for (const plant of contract.plants) {
+              const plantPayload = {
+                contract_id: contractId,
+                name: plant.name,
+                scale: plant.scale,
+                sampling_points: plant.sampling_points || []
+              };
+
+              let plantId;
+              if (plant.id) {
+                await apiFetch('/api/water-plants/' + plant.id, {
+                  method: 'PUT',
+                  body: JSON.stringify(plantPayload)
+                });
+                plantId = plant.id;
+              } else {
+                const createdPlant = await apiFetch('/api/water-plants', {
+                  method: 'POST',
+                  body: JSON.stringify(plantPayload)
+                });
+                plantId = createdPlant.id;
+              }
+
+              // Save detection items
+              for (const item of plant.detection_items) {
+                const itemPayload = {
+                  water_plant_id: plantId,
+                  sample_category: item.sample_category,
+                  detection_name: item.detection_name,
+                  detection_standard: item.detection_standard,
+                  frequency_type: item.frequency_type,
+                  frequency_value: item.frequency_value,
+                  unit_price: item.unit_price,
+                  annual_count: item.annual_count,
+                  subtotal: (item.unit_price || 0) * (item.annual_count || 0)
+                };
+                if (item.id) {
+                  await apiFetch('/api/detection-items/' + item.id, {
+                    method: 'PUT',
+                    body: JSON.stringify(itemPayload)
+                  });
+                } else {
+                  await apiFetch('/api/detection-items', {
+                    method: 'POST',
+                    body: JSON.stringify(itemPayload)
+                  });
+                }
+              }
+            }
+
+            ElementPlus.ElMessage.success('合同保存成功');
+            contract.dialogVisible = false;
+            loadContracts();
+          } catch (e) {
+            // error already shown by apiFetch
+          }
+          contract.saving = false;
+        }
+
+        async function deleteContract(id) {
+          try {
+            await apiFetch('/api/contracts/' + id, { method: 'DELETE' });
+            ElementPlus.ElMessage.success('删除成功');
+            loadContracts();
+          } catch (e) {}
+        }
+
+        async function expandContractDetail(row) {
+          if (row._plants) return;
+          row._plantsLoading = true;
+          try {
+            const plantsData = await apiFetch('/api/water-plants?contract_id=' + row.id);
+            const plants = Array.isArray(plantsData) ? plantsData : (plantsData.items || plantsData.data || []);
+            for (const p of plants) {
+              p._itemsLoading = true;
+              try {
+                const itemsData = await apiFetch('/api/detection-items?water_plant_id=' + p.id);
+                p._items = Array.isArray(itemsData) ? itemsData : (itemsData.items || itemsData.data || []);
+              } catch (e2) {
+                p._items = [];
+              }
+              p._itemsLoading = false;
+            }
+            row._plants = plants;
+          } catch (e) {
+            row._plants = [];
+          }
+          row._plantsLoading = false;
+        }
+
+        async function generatePlan(contractId) {
+          try {
+            const result = await apiFetch('/api/contracts/' + contractId + '/generate-plan', {
+              method: 'POST'
+            });
+            const msg = result.message || result.msg || '计划生成成功';
+            const count = result.count || result.task_count || '';
+            ElementPlus.ElMessage.success(msg + (count ? ' (共' + count + '条任务)' : ''));
+          } catch (e) {}
+        }
+
+        // Excel import
+        function handleImportFileChange(file) {
+          contract.importFile = file.raw;
+        }
+
+        async function downloadTemplate() {
+          try {
+            const res = await fetch('/api/import/template');
+            if (!res.ok) throw new Error('下载失败');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '导入模板.xlsx';
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            ElementPlus.ElMessage.error('模板下载失败');
+          }
+        }
+
+        async function doImportExcel() {
+          if (!contract.importForm.company_id) {
+            ElementPlus.ElMessage.warning('请选择公司');
+            return;
+          }
+          if (!contract.importFile) {
+            ElementPlus.ElMessage.warning('请选择Excel文件');
+            return;
+          }
+          contract.importing = true;
+          try {
+            const formData = new FormData();
+            formData.append('file', contract.importFile);
+            formData.append('company_id', contract.importForm.company_id);
+            formData.append('contract_no', contract.importForm.contract_no || '');
+            formData.append('year', contract.importForm.year || currentYear);
+
+            const res = await fetch('/api/import/excel', {
+              method: 'POST',
+              body: formData
+            });
+            if (!res.ok) {
+              let errMsg = '导入失败';
+              try {
+                const errBody = await res.json();
+                errMsg = errBody.detail || errBody.message || errMsg;
+              } catch (e2) {}
+              throw new Error(errMsg);
+            }
+            const data = await res.json();
+            ElementPlus.ElMessage.success(data.message || '导入成功');
+            contract.importVisible = false;
+            contract.importFile = null;
+            loadContracts();
+          } catch (e) {
+            ElementPlus.ElMessage.error(e.message || '导入失败');
+          }
+          contract.importing = false;
+        }
+
+        // ====== TASKS ======
+        const task = reactive({
+          list: [],
+          loading: false,
+          total: 0,
+          page: 1,
+          pageSize: 20,
+          filterYear: currentYear,
+          filterMonth: null,
+          filterCompany: null,
+          filterStatus: null,
+          filterSource: null,
+          selectedRows: [],
+          batchStatus: '',
+          detailVisible: false,
+          detailForm: {},
+          detailSaving: false,
+          addVisible: false,
+          addForm: {
+            company_id: null,
+            water_plant_name: '',
+            sample_category: '',
+            detection_name: '',
+            detection_standard: '',
+            year: currentYear,
+            month: null,
+            planned_date: '',
+            notes: ''
+          },
+          addSaving: false
+        });
+
+        const taskRules = {
+          company_id: [{ required: true, message: '请选择公司', trigger: 'change' }],
+          water_plant_name: [{ required: true, message: '请输入水厂名称', trigger: 'blur' }],
+          sample_category: [{ required: true, message: '请输入样品类别', trigger: 'blur' }],
+          detection_name: [{ required: true, message: '请输入检测项目', trigger: 'blur' }],
+          year: [{ required: true, message: '请选择年份', trigger: 'change' }],
+          month: [{ required: true, message: '请选择月份', trigger: 'change' }]
+        };
+
+        async function loadTasks() {
+          task.loading = true;
+          try {
+            let url = '/api/tasks?';
+            url += 'year=' + task.filterYear + '&';
+            if (task.filterMonth) url += 'month=' + task.filterMonth + '&';
+            if (task.filterCompany) url += 'company_id=' + task.filterCompany + '&';
+            if (task.filterStatus) url += 'status=' + encodeURIComponent(task.filterStatus) + '&';
+            if (task.filterSource) url += 'source=' + encodeURIComponent(task.filterSource) + '&';
+            url += 'page=' + task.page + '&page_size=' + task.pageSize;
+
+            const data = await apiFetch(url);
+            if (Array.isArray(data)) {
+              task.list = data;
+              task.total = data.length;
+            } else {
+              task.list = data.items || data.data || [];
+              task.total = data.total || data.count || task.list.length;
+            }
+          } catch (e) {
+            task.list = [];
+            task.total = 0;
+          }
+          task.loading = false;
+        }
+
+        function handleTaskSelectionChange(selection) {
+          task.selectedRows = selection;
+        }
+
+        async function batchUpdateStatus() {
+          if (!task.batchStatus) {
+            ElementPlus.ElMessage.warning('请选择目标状态');
+            return;
+          }
+          if (task.selectedRows.length === 0) {
+            ElementPlus.ElMessage.warning('请选择任务');
+            return;
+          }
+          try {
+            const ids = task.selectedRows.map(r => r.id);
+            await apiFetch('/api/tasks/batch-status', {
+              method: 'PATCH',
+              body: JSON.stringify({ ids: ids, status: task.batchStatus })
+            });
+            ElementPlus.ElMessage.success('批量修改成功');
+            task.batchStatus = '';
+            task.selectedRows = [];
+            loadTasks();
+          } catch (e) {}
+        }
+
+        function openTaskDetail(row) {
+          task.detailForm = { ...row };
+          task.detailVisible = true;
+        }
+
+        async function saveTaskDetail() {
+          task.detailSaving = true;
+          try {
+            const payload = {
+              status: task.detailForm.status,
+              planned_date: task.detailForm.planned_date,
+              actual_date: task.detailForm.actual_date,
+              executor: task.detailForm.executor,
+              notes: task.detailForm.notes
+            };
+            await apiFetch('/api/tasks/' + task.detailForm.id, {
+              method: 'PUT',
+              body: JSON.stringify(payload)
+            });
+            ElementPlus.ElMessage.success('保存成功');
+            task.detailVisible = false;
+            loadTasks();
+          } catch (e) {}
+          task.detailSaving = false;
+        }
+
+        async function deleteTask(id) {
+          try {
+            await apiFetch('/api/tasks/' + id, { method: 'DELETE' });
+            ElementPlus.ElMessage.success('删除成功');
+            loadTasks();
+          } catch (e) {}
+        }
+
+        function openTaskDialog(row) {
+          task.addForm = {
+            company_id: null,
+            water_plant_name: '',
+            sample_category: '',
+            detection_name: '',
+            detection_standard: '',
+            year: currentYear,
+            month: null,
+            planned_date: '',
+            notes: ''
+          };
+          task.addVisible = true;
+        }
+
+        async function saveNewTask() {
+          if (taskFormRef.value) {
+            try {
+              await taskFormRef.value.validate();
+            } catch (e) {
+              return;
+            }
+          }
+          task.addSaving = true;
+          try {
+            const payload = {
+              ...task.addForm,
+              source: '临时任务',
+              status: '待采样'
+            };
+            await apiFetch('/api/tasks', {
+              method: 'POST',
+              body: JSON.stringify(payload)
+            });
+            ElementPlus.ElMessage.success('任务创建成功');
+            task.addVisible = false;
+            loadTasks();
+          } catch (e) {}
+          task.addSaving = false;
+        }
+
+        // ====== COMPANIES ======
+        const company = reactive({
+          list: [],
+          loading: false,
+          dialogVisible: false,
+          editingId: null,
+          form: {
+            name: '',
+            group_name: '',
+            address: '',
+            contact_person: '',
+            contact_phone: ''
+          },
+          saving: false
+        });
+
+        const companyRules = {
+          name: [{ required: true, message: '请输入公司名称', trigger: 'blur' }],
+          group_name: [{ required: true, message: '请输入所属集团', trigger: 'blur' }]
+        };
+
+        async function loadCompanyList() {
+          company.loading = true;
+          try {
+            const data = await apiFetch('/api/companies');
+            company.list = Array.isArray(data) ? data : (data.items || data.data || []);
+            companyList.value = company.list;
+          } catch (e) {
+            company.list = [];
+          }
+          company.loading = false;
+        }
+
+        function openCompanyDialog(row) {
+          if (row) {
+            company.editingId = row.id;
+            company.form = {
+              name: row.name,
+              group_name: row.group_name || '',
+              address: row.address || '',
+              contact_person: row.contact_person || '',
+              contact_phone: row.contact_phone || ''
+            };
+          } else {
+            company.editingId = null;
+            company.form = {
+              name: '',
+              group_name: '',
+              address: '',
+              contact_person: '',
+              contact_phone: ''
+            };
+          }
+          company.dialogVisible = true;
+        }
+
+        async function saveCompany() {
+          if (companyFormRef.value) {
+            try {
+              await companyFormRef.value.validate();
+            } catch (e) {
+              return;
+            }
+          }
+          company.saving = true;
+          try {
+            if (company.editingId) {
+              await apiFetch('/api/companies/' + company.editingId, {
+                method: 'PUT',
+                body: JSON.stringify(company.form)
+              });
+            } else {
+              await apiFetch('/api/companies', {
+                method: 'POST',
+                body: JSON.stringify(company.form)
+              });
+            }
+            ElementPlus.ElMessage.success('保存成功');
+            company.dialogVisible = false;
+            loadCompanyList();
+          } catch (e) {}
+          company.saving = false;
+        }
+
+        async function deleteCompany(id) {
+          try {
+            await apiFetch('/api/companies/' + id, { method: 'DELETE' });
+            ElementPlus.ElMessage.success('删除成功');
+            loadCompanyList();
+          } catch (e) {}
+        }
+
+        // ====== Menu Navigation ======
+        function handleMenuSelect(index) {
+          activeMenu.value = index;
+          if (index === 'dashboard') {
+            loadDashboard();
+          } else if (index === 'contracts') {
+            loadCompanies();
+            loadContracts();
+          } else if (index === 'tasks') {
+            loadCompanies();
+            loadTasks();
+          } else if (index === 'companies') {
+            loadCompanyList();
+          }
+        }
+
+        // ====== Init ======
+        onMounted(() => {
+          loadCompanies();
+          loadDashboard();
+        });
+
+        return {
+          // shared
+          activeMenu,
+          sidebarCollapsed,
+          companyList,
+          currentDateStr,
+          yearOptions,
+          menuTitleMap,
+          freqTypeMap,
+          getCompanyName,
+          statusTagType,
+          handleMenuSelect,
+
+          // refs
+          contractFormRef,
+          companyFormRef,
+          taskFormRef,
+          importUploadRef,
+
+          // dashboard
+          dash,
+          loadDashboard,
+
+          // contracts
+          contract,
+          contractRules,
+          loadContracts,
+          openContractDialog,
+          nextContractStep,
+          addWizardPlant,
+          confirmPlantTag,
+          addDetectionItem,
+          saveContract,
+          deleteContract,
+          expandContractDetail,
+          generatePlan,
+          handleImportFileChange,
+          downloadTemplate,
+          doImportExcel,
+
+          // tasks
+          task,
+          taskRules,
+          loadTasks,
+          handleTaskSelectionChange,
+          batchUpdateStatus,
+          openTaskDetail,
+          saveTaskDetail,
+          deleteTask,
+          openTaskDialog,
+          saveNewTask,
+
+          // companies
+          company,
+          companyRules,
+          loadCompanyList,
+          openCompanyDialog,
+          saveCompany,
+          deleteCompany
+        };
+      }
+    });
+
+    // Register all Element Plus icons
+    for (const [key, component] of Object.entries(ElementPlusIcons)) {
+      app.component(key, component);
+    }
+
+    // Use Element Plus with Chinese locale
+    app.use(ElementPlus, {
+      locale: ElementPlusLocale
+    });
+
+    app.mount('#app');
+  </script>
+</body>
+</html>
