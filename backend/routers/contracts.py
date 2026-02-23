@@ -105,6 +105,8 @@ def update_contract(
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
     update_data = data.model_dump(exclude_unset=True)
+    water_plants_data = update_data.pop("water_plants", None)
+
     # Check uniqueness if contract_no is being changed
     if "contract_no" in update_data and update_data["contract_no"] != contract.contract_no:
         existing = (
@@ -119,6 +121,24 @@ def update_contract(
             )
     for key, value in update_data.items():
         setattr(contract, key, value)
+
+    # Replace water_plants if provided
+    if water_plants_data is not None:
+        for wp in list(contract.water_plants):
+            db.delete(wp)
+        db.flush()
+
+        for wp_raw in water_plants_data:
+            wp_dict = {k: v for k, v in wp_raw.items() if k != "detection_items"}
+            wp_dict["contract_id"] = contract.id
+            wp = WaterPlant(**wp_dict)
+            db.add(wp)
+            db.flush()
+            for di_raw in (wp_raw.get("detection_items") or []):
+                di_dict = dict(di_raw)
+                di_dict["water_plant_id"] = wp.id
+                db.add(DetectionItem(**di_dict))
+
     db.commit()
     # Reload with relationships
     contract = (

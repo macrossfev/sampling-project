@@ -23,6 +23,7 @@
 
 <div class="card">
     <div class="filter-bar">
+        <div class="form-group"><label>集团</label><select id="filterGroup" class="form-control" onchange="onGroupFilter()"><option value="">全部</option></select></div>
         <div class="form-group"><label>公司</label><select id="filterCompany" class="form-control" onchange="loadContracts()"><option value="">全部</option></select></div>
         <div class="form-group"><label>年度</label><select id="filterYear" class="form-control" onchange="loadContracts()">
             <option value="">全部</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
@@ -30,7 +31,7 @@
     </div>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>合同编号</th><th>所属公司</th><th>年度</th><th>有效期</th><th>总金额</th><th style="width:200px;">操作</th></tr></thead>
+            <thead><tr><th>合同编号</th><th>所属集团</th><th>所属公司</th><th>年度</th><th>有效期</th><th>总金额</th><th>备注</th><th style="width:220px;">操作</th></tr></thead>
             <tbody id="contractBody"></tbody>
         </table>
     </div>
@@ -54,6 +55,7 @@
                 <div class="form-group"><label>开始日期</label><input class="form-control" type="date" id="cm_start_date"></div>
                 <div class="form-group"><label>结束日期</label><input class="form-control" type="date" id="cm_end_date"></div>
             </div>
+            <div class="form-group"><label>备注</label><textarea class="form-control" id="cm_notes" rows="2" placeholder="合同备注信息"></textarea></div>
 
             <div class="flex-between mt-10" style="margin-top:18px;">
                 <strong style="font-size:14px;">水厂及检测项目</strong>
@@ -104,6 +106,7 @@ function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.te
 function loadCompanies(cb) {
     api('/api/companies').then(function(list) {
         companies = list;
+        populateGroupFilter();
         populateCompanySelects();
         if (cb) cb();
     });
@@ -131,6 +134,38 @@ function companyName(id) {
     return '';
 }
 
+function companyGroup(id) {
+    for (var i = 0; i < companies.length; i++) { if (companies[i].id == id) return companies[i].group_name || ''; }
+    return '';
+}
+
+function populateGroupFilter() {
+    var sel = document.getElementById('filterGroup');
+    var old = sel.value;
+    sel.innerHTML = '<option value="">全部</option>';
+    var groups = {};
+    companies.forEach(function(c) {
+        if (c.group_name && !groups[c.group_name]) {
+            groups[c.group_name] = true;
+            sel.innerHTML += '<option value="' + esc(c.group_name) + '">' + esc(c.group_name) + '</option>';
+        }
+    });
+    sel.value = old;
+}
+
+function onGroupFilter() {
+    var group = document.getElementById('filterGroup').value;
+    var sel = document.getElementById('filterCompany');
+    sel.innerHTML = '<option value="">全部</option>';
+    companies.forEach(function(c) {
+        if (!group || c.group_name === group) {
+            sel.innerHTML += '<option value="' + c.id + '">' + esc(c.name) + '</option>';
+        }
+    });
+    sel.value = '';
+    loadContracts();
+}
+
 function loadContracts() {
     var cid = document.getElementById('filterCompany').value;
     var yr = document.getElementById('filterYear').value;
@@ -140,18 +175,25 @@ function loadContracts() {
     var url = '/api/contracts' + (params.length ? '?' + params.join('&') : '');
 
     api(url).then(function(list) {
+        var group = document.getElementById('filterGroup').value;
+        if (group && !cid) {
+            var groupIds = {};
+            companies.forEach(function(co) { if (co.group_name === group) groupIds[co.id] = true; });
+            list = list.filter(function(c) { return groupIds[c.company_id]; });
+        }
         var tbody = document.getElementById('contractBody');
         tbody.innerHTML = '';
-        if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>'; return; }
+        if (!list.length) { tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>'; return; }
         list.forEach(function(c) {
             var period = (c.start_date || '-') + ' ~ ' + (c.end_date || '-');
             var amount = c.total_amount != null ? c.total_amount.toLocaleString() + ' 元' : '-';
             var tr = document.createElement('tr');
             tr.id = 'row-' + c.id;
-            tr.innerHTML = '<td>' + esc(c.contract_no) + '</td><td>' + esc(companyName(c.company_id)) + '</td><td>' + (c.year||'-') + '</td>' +
-                '<td>' + period + '</td><td>' + amount + '</td>' +
+            tr.innerHTML = '<td>' + esc(c.contract_no) + '</td><td>' + esc(companyGroup(c.company_id)) + '</td><td>' + esc(companyName(c.company_id)) + '</td><td>' + (c.year||'-') + '</td>' +
+                '<td>' + period + '</td><td>' + amount + '</td><td>' + esc(c.notes) + '</td>' +
                 '<td>' +
                 '<button class="btn btn-sm btn-info mr-8" onclick="toggleDetail(' + c.id + ')">查看</button>' +
+                '<button class="btn btn-sm btn-success mr-8" onclick="openEditContract(' + c.id + ')">修改</button>' +
                 '<button class="btn btn-sm btn-warning mr-8" onclick="generatePlan(' + c.id + ')">生成计划</button>' +
                 '<button class="btn btn-sm btn-danger" onclick="delContract(' + c.id + ')">删除</button></td>';
             tbody.appendChild(tr);
@@ -183,7 +225,7 @@ function loadDetailRow(id, tbody) {
         detailTr.id = 'detail-' + id;
         detailTr.className = 'detail-row';
         var td = document.createElement('td');
-        td.colSpan = 6;
+        td.colSpan = 8;
 
         var html = '<div class="detail-inner">';
         if (!c.water_plants || !c.water_plants.length) {
@@ -192,9 +234,9 @@ function loadDetailRow(id, tbody) {
             c.water_plants.forEach(function(wp) {
                 html += '<div class="wp-block"><div class="wp-block-head"><strong>' + esc(wp.name) + '</strong><span style="color:#888;font-size:12px;">规模: ' + esc(wp.scale) + ' | 采样点: ' + esc(wp.sampling_points) + '</span></div>';
                 if (wp.detection_items && wp.detection_items.length) {
-                    html += '<table class="items-table"><thead><tr><th>样品类别</th><th>检测项目</th><th>检测标准</th><th>频次类型</th><th>频次</th><th>单价</th><th>年次数</th><th>小计</th></tr></thead><tbody>';
+                    html += '<table class="items-table"><thead><tr><th>样品类别</th><th>检测项目</th><th>检测级别</th><th>检测标准</th><th>频次类型</th><th>频次</th><th>单价</th><th>年次数</th><th>小计</th></tr></thead><tbody>';
                     wp.detection_items.forEach(function(di) {
-                        html += '<tr><td>' + esc(di.sample_type) + '</td><td>' + esc(di.detection_project) + '</td><td>' + esc(di.detection_standard) + '</td>' +
+                        html += '<tr><td>' + esc(di.sample_type) + '</td><td>' + esc(di.detection_project) + '</td><td>' + esc(di.detection_level) + '</td><td>' + esc(di.detection_standard) + '</td>' +
                             '<td>' + esc(di.frequency_type) + '</td><td>' + di.frequency_value + '</td><td>' + (di.unit_price||'-') + '</td><td>' + (di.annual_count||'-') + '</td><td>' + (di.subtotal||'-') + '</td></tr>';
                     });
                     html += '</tbody></table>';
@@ -238,6 +280,7 @@ function openAddContract() {
     document.getElementById('cm_total_amount').value = '';
     document.getElementById('cm_start_date').value = '';
     document.getElementById('cm_end_date').value = '';
+    document.getElementById('cm_notes').value = '';
     document.getElementById('wpContainer').innerHTML = '';
     wpIndex = 0;
     openModal('contractModal');
@@ -254,27 +297,57 @@ function addWpBlock() {
         '<div class="form-group"><label>规模</label><input class="form-control wp-scale" data-idx="' + idx + '"></div>' +
         '<div class="form-group"><label>采样点</label><input class="form-control wp-points" data-idx="' + idx + '"></div></div>' +
         '<div class="flex-between mt-10"><span style="font-size:13px;font-weight:600;">检测项目</span><button class="btn btn-sm btn-success" onclick="addDiRow(' + idx + ')">+ 添加项目</button></div>' +
-        '<table class="items-table" style="margin-top:6px;"><thead><tr><th>样品类别</th><th>检测项目</th><th>检测标准</th><th>频次类型</th><th>频次</th><th>单价</th><th>年次数</th><th>小计</th><th></th></tr></thead>' +
+        '<table class="items-table" style="margin-top:6px;"><thead><tr><th>样品类别</th><th>检测项目</th><th>检测级别</th><th>检测标准</th><th>频次类型</th><th>频次</th><th>单价</th><th>年次数</th><th>小计</th><th></th></tr></thead>' +
         '<tbody id="di-body-' + idx + '"></tbody></table>';
     document.getElementById('wpContainer').appendChild(div);
 }
 
 function removeWp(idx) { var el = document.getElementById('wp-' + idx); if (el) el.remove(); }
 
-function addDiRow(wpIdx) {
+function addDiRow(wpIdx, di) {
+    var p = di || {};
     var tbody = document.getElementById('di-body-' + wpIdx);
     var tr = document.createElement('tr');
+    function v(x) { return (x !== null && x !== undefined) ? x : ''; }
+    var lvlOpts = ['常规','全分析'];
+    var lvlHtml = '<select class="form-control" style="width:70px;" name="di_detection_level"><option value="">--</option>';
+    lvlOpts.forEach(function(o) { lvlHtml += '<option value="' + o + '"' + (p.detection_level === o ? ' selected' : '') + '>' + o + '</option>'; });
+    lvlHtml += '</select>';
+    var ftOpts = ['月','季','半年','年'];
+    var ftHtml = '<select class="form-control" style="width:70px;" name="di_frequency_type">';
+    ftOpts.forEach(function(o) { ftHtml += '<option value="' + o + '"' + (p.frequency_type === o ? ' selected' : '') + '>' + o + '</option>'; });
+    ftHtml += '</select>';
+    var stVal = (p.unit_price && p.annual_count) ? (parseFloat(p.unit_price) * parseInt(p.annual_count)).toFixed(2) : v(p.subtotal);
     tr.innerHTML =
-        '<td><input class="form-control" style="width:80px;" name="di_sample_type"></td>' +
-        '<td><input class="form-control" style="width:100px;" name="di_detection_project"></td>' +
-        '<td><input class="form-control" style="width:100px;" name="di_detection_standard"></td>' +
-        '<td><select class="form-control" style="width:70px;" name="di_frequency_type"><option value="月">月</option><option value="季">季</option><option value="半年">半年</option><option value="年">年</option></select></td>' +
-        '<td><input class="form-control" style="width:50px;" type="number" name="di_frequency_value" value="1"></td>' +
-        '<td><input class="form-control" style="width:70px;" type="number" step="0.01" name="di_unit_price"></td>' +
-        '<td><input class="form-control" style="width:55px;" type="number" name="di_annual_count"></td>' +
-        '<td><input class="form-control" style="width:70px;" type="number" step="0.01" name="di_subtotal"></td>' +
-        '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove()">x</button></td>';
+        '<td><input class="form-control" style="width:80px;" name="di_sample_type" value="' + esc(v(p.sample_type)) + '"></td>' +
+        '<td><input class="form-control" style="width:100px;" name="di_detection_project" value="' + esc(v(p.detection_project)) + '"></td>' +
+        '<td>' + lvlHtml + '</td>' +
+        '<td><input class="form-control" style="width:100px;" name="di_detection_standard" value="' + esc(v(p.detection_standard)) + '"></td>' +
+        '<td>' + ftHtml + '</td>' +
+        '<td><input class="form-control" style="width:50px;" type="number" name="di_frequency_value" value="' + (p.frequency_value || 1) + '"></td>' +
+        '<td><input class="form-control" style="width:70px;" type="number" step="0.01" name="di_unit_price" value="' + v(p.unit_price) + '"></td>' +
+        '<td><input class="form-control" style="width:55px;" type="number" name="di_annual_count" value="' + v(p.annual_count) + '"></td>' +
+        '<td><input class="form-control" style="width:80px;" type="number" step="0.01" name="di_subtotal" value="' + v(stVal) + '" readonly style="background:#f0f0f0;"></td>' +
+        '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();syncTotalAmount();">x</button></td>';
     tbody.appendChild(tr);
+    var upEl = tr.querySelector('[name="di_unit_price"]');
+    var acEl = tr.querySelector('[name="di_annual_count"]');
+    function calcSt() {
+        var up = parseFloat(upEl.value) || 0;
+        var ac = parseInt(acEl.value) || 0;
+        tr.querySelector('[name="di_subtotal"]').value = (up && ac) ? (up * ac).toFixed(2) : '';
+        syncTotalAmount();
+    }
+    upEl.addEventListener('input', calcSt);
+    acEl.addEventListener('input', calcSt);
+}
+
+function syncTotalAmount() {
+    var total = 0;
+    document.querySelectorAll('#wpContainer [name="di_subtotal"]').forEach(function(el) {
+        total += parseFloat(el.value) || 0;
+    });
+    document.getElementById('cm_total_amount').value = total ? total.toFixed(2) : '';
 }
 
 function saveContract() {
@@ -294,16 +367,17 @@ function saveContract() {
         };
         var rows = block.querySelectorAll('#di-body-' + idx + ' tr');
         rows.forEach(function(row) {
-            var inputs = row.querySelectorAll('input, select');
+            function gf(n) { var el = row.querySelector('[name="' + n + '"]'); return el ? el.value.trim() : ''; }
             wp.detection_items.push({
-                sample_type: inputs[0].value.trim() || null,
-                detection_project: inputs[1].value.trim() || null,
-                detection_standard: inputs[2].value.trim() || null,
-                frequency_type: inputs[3].value || null,
-                frequency_value: parseInt(inputs[4].value) || 1,
-                unit_price: parseFloat(inputs[5].value) || null,
-                annual_count: parseInt(inputs[6].value) || null,
-                subtotal: parseFloat(inputs[7].value) || null
+                sample_type: gf('di_sample_type') || null,
+                detection_project: gf('di_detection_project') || null,
+                detection_level: gf('di_detection_level') || null,
+                detection_standard: gf('di_detection_standard') || null,
+                frequency_type: gf('di_frequency_type') || null,
+                frequency_value: parseInt(gf('di_frequency_value')) || 1,
+                unit_price: parseFloat(gf('di_unit_price')) || null,
+                annual_count: parseInt(gf('di_annual_count')) || null,
+                subtotal: parseFloat(gf('di_subtotal')) || null
             });
         });
         water_plants.push(wp);
@@ -316,14 +390,50 @@ function saveContract() {
         start_date: document.getElementById('cm_start_date').value || null,
         end_date: document.getElementById('cm_end_date').value || null,
         total_amount: parseFloat(document.getElementById('cm_total_amount').value) || null,
+        notes: document.getElementById('cm_notes').value.trim() || null,
         water_plants: water_plants
     };
 
-    apiJSON('/api/contracts', 'POST', body).then(function() {
+    var editId = document.getElementById('cmId').value;
+    var method = editId ? 'PUT' : 'POST';
+    var url = editId ? '/api/contracts/' + editId : '/api/contracts';
+
+    apiJSON(url, method, body).then(function() {
         closeModal('contractModal');
-        showToast('合同创建成功');
+        showToast(editId ? '合同修改成功' : '合同创建成功');
         loadContracts();
     }).catch(function(e) { showToast(e.detail || '保存失败', 'error'); });
+}
+
+/* ===== Edit Contract ===== */
+function openEditContract(id) {
+    api('/api/contracts/' + id).then(function(c) {
+        document.getElementById('cmTitle').textContent = '修改合同';
+        document.getElementById('cmId').value = c.id;
+        document.getElementById('cm_company_id').value = c.company_id;
+        document.getElementById('cm_contract_no').value = c.contract_no || '';
+        document.getElementById('cm_year').value = c.year || '';
+        document.getElementById('cm_total_amount').value = c.total_amount || '';
+        document.getElementById('cm_start_date').value = c.start_date || '';
+        document.getElementById('cm_end_date').value = c.end_date || '';
+        document.getElementById('cm_notes').value = c.notes || '';
+        document.getElementById('wpContainer').innerHTML = '';
+        wpIndex = 0;
+        if (c.water_plants && c.water_plants.length) {
+            c.water_plants.forEach(function(wp) {
+                var idx = wpIndex;
+                addWpBlock();
+                var block = document.getElementById('wp-' + idx);
+                block.querySelector('.wp-name').value = wp.name || '';
+                block.querySelector('.wp-scale').value = wp.scale || '';
+                block.querySelector('.wp-points').value = wp.sampling_points || '';
+                if (wp.detection_items && wp.detection_items.length) {
+                    wp.detection_items.forEach(function(di) { addDiRow(idx, di); });
+                }
+            });
+        }
+        openModal('contractModal');
+    }).catch(function(e) { showToast(e.detail || '加载合同失败', 'error'); });
 }
 
 /* ===== Excel Import ===== */

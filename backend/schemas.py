@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 
 class CompanyCreate(BaseModel):
     name: str
+    short_name: Optional[str] = None
     group_name: Optional[str] = None
     address: Optional[str] = None
     contact_person: Optional[str] = None
@@ -16,6 +17,7 @@ class CompanyCreate(BaseModel):
 
 class CompanyUpdate(BaseModel):
     name: Optional[str] = None
+    short_name: Optional[str] = None
     group_name: Optional[str] = None
     address: Optional[str] = None
     contact_person: Optional[str] = None
@@ -28,6 +30,7 @@ class CompanyResponse(BaseModel):
 
     id: int
     name: str
+    short_name: Optional[str] = None
     group_name: Optional[str] = None
     address: Optional[str] = None
     contact_person: Optional[str] = None
@@ -111,6 +114,7 @@ class ContractUpdate(BaseModel):
     end_date: Optional[date] = None
     total_amount: Optional[float] = None
     notes: Optional[str] = None
+    water_plants: Optional[List[WaterPlantCreate]] = None
 
 
 class ContractResponse(BaseModel):
@@ -234,6 +238,7 @@ class SamplingTripResponse(BaseModel):
     group_no: int
     company_id: int
     company_name: Optional[str] = None
+    company_short_name: Optional[str] = None
     trip_type: str = "single_day"
     start_date: date
     end_date: date

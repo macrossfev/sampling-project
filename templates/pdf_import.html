@@ -73,7 +73,7 @@
             </div>
             <div class="form-group">
                 <label>总金额(元)</label>
-                <input id="totalAmount" type="number" step="0.01" class="form-control" placeholder="总金额">
+                <input id="totalAmount" type="number" step="0.01" class="form-control" placeholder="自动计算" readonly style="background:#f0f0f0;">
             </div>
         </div>
 
@@ -152,6 +152,7 @@ function showReview(data) {
     } else {
         addPlant(null);
     }
+    syncImportTotal();
 }
 
 function setVal(id, val, highlight) {
@@ -262,7 +263,7 @@ function addItem(plantIdx, item) {
         + '<td>' + inp('unit_price', p.unit_price) + '</td>'
         + '<td>' + inp('annual_count', p.annual_count) + '</td>'
         + '<td><input data-field="subtotal" class="' + (subtotalVal ? 'parsed-field' : '') + '" value="' + escHtml(subtotalVal) + '" readonly style="background:#f0f0f0;"></td>'
-        + '<td><button class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">删除</button></td>';
+        + '<td><button class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove();syncImportTotal();">删除</button></td>';
     tbody.appendChild(tr);
 
     var upEl = tr.querySelector('[data-field="unit_price"]');
@@ -272,9 +273,18 @@ function addItem(plantIdx, item) {
         var ac = parseInt(acEl.value) || 0;
         var stEl = tr.querySelector('[data-field="subtotal"]');
         stEl.value = (up && ac) ? (up * ac).toFixed(2) : '';
+        syncImportTotal();
     }
     upEl.addEventListener('input', calcSubtotal);
     acEl.addEventListener('input', calcSubtotal);
+}
+
+function syncImportTotal() {
+    var total = 0;
+    document.querySelectorAll('#plantsContainer [data-field="subtotal"]').forEach(function(el) {
+        total += parseFloat(el.value) || 0;
+    });
+    document.getElementById('totalAmount').value = total ? total.toFixed(2) : '';
 }
 
 function escHtml(s) {

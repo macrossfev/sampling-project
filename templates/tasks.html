@@ -24,7 +24,7 @@
         <div class="form-group"><label>公司</label><select id="fCompany" class="form-control" onchange="loadTasks()"><option value="">全部</option></select></div>
         <div class="form-group"><label>状态</label>
             <select id="fStatus" class="form-control" onchange="loadTasks()">
-                <option value="">全部</option><option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option>
+                <option value="">全部</option><option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option><option value="已完成">已完成</option>
             </select>
         </div>
         <div class="form-group"><label>来源</label>
@@ -38,7 +38,7 @@
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
         <label style="font-size:13px;color:#555;">批量操作:</label>
         <select id="batchStatus" class="form-control" style="width:130px;">
-            <option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option>
+            <option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option><option value="已完成">已完成</option>
         </select>
         <button class="btn btn-sm btn-warning" onclick="batchUpdate()">批量更新</button>
         <span id="selectedCount" style="font-size:12px;color:#888;margin-left:4px;">已选 0 项</span>
@@ -94,7 +94,7 @@
             <div class="form-row">
                 <div class="form-group"><label>状态</label>
                     <select class="form-control" id="e_status">
-                        <option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option>
+                        <option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option><option value="已完成">已完成</option>
                     </select>
                 </div>
                 <div class="form-group"><label>执行人</label><input class="form-control" id="e_executor"></div>
@@ -128,6 +128,7 @@ function statusBadge(s) {
     if (s === '已采样') cls = 'badge-orange';
     else if (s === '已送检') cls = 'badge-blue';
     else if (s === '已出报告') cls = 'badge-green';
+    else if (s === '已完成') cls = 'badge-green';
     return '<span class="badge ' + cls + '">' + esc(s) + '</span>';
 }
 

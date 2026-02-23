@@ -13,7 +13,7 @@
 <div class="card">
     <div class="table-wrap">
         <table>
-            <thead><tr><th>公司名称</th><th>所属集团</th><th>地址</th><th>联系人</th><th>联系电话</th><th style="width:120px;">操作</th></tr></thead>
+            <thead><tr><th>公司名称</th><th>简称</th><th>所属集团</th><th>地址</th><th>联系人</th><th>联系电话</th><th style="width:120px;">操作</th></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
     </div>
@@ -29,6 +29,7 @@
         <div class="modal-body">
             <input type="hidden" id="editId">
             <div class="form-group"><label>公司名称 *</label><input class="form-control" id="f_name"></div>
+            <div class="form-group"><label>简称</label><input class="form-control" id="f_short_name"></div>
             <div class="form-group"><label>所属集团</label><input class="form-control" id="f_group_name"></div>
             <div class="form-group"><label>地址</label><input class="form-control" id="f_address"></div>
             <div class="form-row">
@@ -69,10 +70,10 @@ function loadList() {
     api('/api/companies').then(function(list) {
         var tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
-        if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>'; return; }
+        if (!list.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>'; return; }
         list.forEach(function(c) {
             var tr = document.createElement('tr');
-            tr.innerHTML = '<td>' + esc(c.name) + '</td><td>' + esc(c.group_name) + '</td><td>' + esc(c.address) + '</td>' +
+            tr.innerHTML = '<td>' + esc(c.name) + '</td><td>' + esc(c.short_name) + '</td><td>' + esc(c.group_name) + '</td><td>' + esc(c.address) + '</td>' +
                 '<td>' + esc(c.contact_person) + '</td><td>' + esc(c.contact_phone) + '</td>' +
                 '<td><button class="btn btn-sm btn-info mr-8" onclick="openEdit(' + c.id + ')">编辑</button>' +
                 '<button class="btn btn-sm btn-danger" onclick="delCompany(' + c.id + ')">删除</button></td>';
@@ -85,6 +86,7 @@ function openAdd() {
     document.getElementById('modalTitle').textContent = '新增公司';
     document.getElementById('editId').value = '';
     document.getElementById('f_name').value = '';
+    document.getElementById('f_short_name').value = '';
     document.getElementById('f_group_name').value = '';
     document.getElementById('f_address').value = '';
     document.getElementById('f_contact_person').value = '';
@@ -97,6 +99,7 @@ function openEdit(id) {
         document.getElementById('modalTitle').textContent = '编辑公司';
         document.getElementById('editId').value = c.id;
         document.getElementById('f_name').value = c.name || '';
+        document.getElementById('f_short_name').value = c.short_name || '';
         document.getElementById('f_group_name').value = c.group_name || '';
         document.getElementById('f_address').value = c.address || '';
         document.getElementById('f_contact_person').value = c.contact_person || '';
@@ -110,6 +113,7 @@ function saveCompany() {
     if (!name) { showToast('请输入公司名称', 'error'); return; }
     var body = {
         name: name,
+        short_name: document.getElementById('f_short_name').value.trim() || null,
         group_name: document.getElementById('f_group_name').value.trim() || null,
         address: document.getElementById('f_address').value.trim() || null,
         contact_person: document.getElementById('f_contact_person').value.trim() || null,

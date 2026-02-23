@@ -1,6 +1,7 @@
 from datetime import date
 from sqlalchemy.orm import Session
 from backend.models import Contract, DetectionItem, SamplingTask, WaterPlant
+from backend.services.monthly_planner import _is_plannable
 
 
 def generate_annual_plan(db: Session, contract_id: int) -> int:
@@ -74,6 +75,8 @@ def generate_annual_plan(db: Session, contract_id: int) -> int:
             .all()
         )
         for item in detection_items:
+            if not _is_plannable(item):
+                continue
             months = _get_months_for_frequency(
                 item.frequency_type, valid_months, plan_year
             )

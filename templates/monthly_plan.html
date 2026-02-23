@@ -47,6 +47,7 @@
         </select>
         <button class="btn btn-primary" onclick="generatePlan()">生成计划</button>
         <button class="btn btn-outline" onclick="addTrip()">+ 手动添加</button>
+        <button class="btn btn-success" onclick="exportExcel()">导出Excel</button>
     </div>
     <div class="scheme-desc" id="schemeDesc">两日行程间隔1天休息，单日行程连续安排</div>
 
@@ -74,12 +75,13 @@
 </div>
 
 <!-- Edit Trip Modal -->
-<div class="modal" id="editTripModal">
-    <div class="modal-content" style="max-width:500px;">
+<div class="modal-overlay" id="editTripModal">
+    <div class="modal" style="width:520px;">
         <div class="modal-header">
             <h3 id="editTripTitle">编辑行程</h3>
-            <span class="modal-close" onclick="closeModal('editTripModal')">&times;</span>
+            <button class="modal-close" onclick="closeModal('editTripModal')">&times;</button>
         </div>
+        <div class="modal-body">
         <input type="hidden" id="etId">
         <div class="form-group">
             <label>公司</label>
@@ -116,12 +118,13 @@
             <label>采样内容</label>
             <textarea id="etSamples" class="form-control" rows="3"></textarea>
         </div>
-        <div style="text-align:right; margin-top:12px;">
+        </div><!-- modal-body -->
+        <div class="modal-footer" style="text-align:right; margin-top:12px;">
             <button class="btn btn-outline" onclick="closeModal('editTripModal')">取消</button>
             <button class="btn btn-primary" onclick="saveTrip()" style="margin-left:8px;">保存</button>
         </div>
-    </div>
-</div>
+    </div><!-- modal -->
+</div><!-- modal-overlay -->
 {% endblock %}
 
 {% block scripts %}
@@ -185,25 +188,26 @@ function renderGrid(trips) {
     // Group by date range
     var dateGroups = {};
     trips.forEach(function(t) {
-        var key = t.start_date + '~' + t.end_date;
-        if (!dateGroups[key]) dateGroups[key] = {start:t.start_date, end:t.end_date, cells:{}};
+        var key = t.start_date;
+        if (!dateGroups[key]) dateGroups[key] = {start:t.start_date, cells:{}};
         dateGroups[key].cells[t.group_no] = t;
     });
     var rows = Object.values(dateGroups).sort(function(a,b){ return a.start < b.start ? -1 : 1; });
     var html = '';
     rows.forEach(function(row) {
-        html += '<tr><td class="row-header" style="text-align:center;font-weight:600;font-size:12px;">'+fmtRange(row.start,row.end)+'</td>';
+        var sp=row.start.split('-'); var label=parseInt(sp[1])+'.'+parseInt(sp[2]);
+        html += '<tr><td class="row-header" style="text-align:center;font-weight:600;font-size:12px;">'+label+'</td>';
         for (var g = 1; g <= maxG; g++) {
             var t = row.cells[g];
             if (t) {
                 var tagCls = t.trip_type==='two_day'?'tag-two':'tag-single';
                 var tagTxt = t.trip_type==='two_day'?'两日':'当日';
                 html += '<td class="trip-cell"><span class="tc-tag '+tagCls+'">'+tagTxt+'</span>';
-                html += '<div class="tc-company">'+(t.company_name||'--')+'</div>';
+                html += '<div class="tc-company">'+(t.company_short_name||t.company_name||'--')+'</div>';
                 html += '<div class="tc-dates">'+fmtRange(t.start_date,t.end_date)+'</div>';
                 if (t.route_notes) html += '<div class="tc-route">'+esc(t.route_notes)+'</div>';
                 if (t.sampling_notes) html += '<div class="tc-samples">'+esc(t.sampling_notes)+'</div>';
-                html += '<div class="tc-actions"><button class="btn btn-info btn-sm" onclick="editTrip('+t.id+')">编辑</button> <button class="btn btn-danger btn-sm" onclick="delTrip('+t.id+')">删除</button></div></td>';
+                html += '<div class="tc-actions"><button class="btn btn-info btn-sm" onclick="editTrip('+t.id+')">编辑</button></div></td>';
             } else { html += '<td class="empty-cell">-</td>'; }
         }
         html += '</tr>';
@@ -340,6 +344,11 @@ function delTrip(id) {
     api('/api/monthly-plan/trips/'+id,{method:'DELETE'})
     .then(function(){ showToast('已删除','success'); loadPlan(); })
     .catch(function(e){ showToast(e.detail||'删除失败','error'); });
+}
+
+function exportExcel() {
+    var y=document.getElementById('planYear').value, m=document.getElementById('planMonth').value;
+    window.location.href='/api/monthly-plan/export-excel?year='+y+'&month='+m;
 }
 </script>
 {% endblock %}

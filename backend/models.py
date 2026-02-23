@@ -11,6 +11,7 @@ class Company(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(200), nullable=False)
+    short_name = Column(String(100))
     group_name = Column(String(200))
     address = Column(String(500))
     contact_person = Column(String(100))
