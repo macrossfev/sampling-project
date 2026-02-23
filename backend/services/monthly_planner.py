@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from backend.models import Company, SamplingTrip, Contract, WaterPlant, DetectionItem
 
 
-def generate_monthly_plan(db: Session, year: int, month: int, scheme: str = "balanced") -> dict:
+def generate_monthly_plan(db: Session, year: int, month: int, scheme: str = "balanced", group_first: bool = False) -> dict:
     """Generate a monthly sampling plan.
 
     Returns dict with 'trips' list and 'stats' summary.
@@ -44,6 +44,12 @@ def generate_monthly_plan(db: Session, year: int, month: int, scheme: str = "bal
     two_day = [c for c in companies if c.trip_type == "two_day"]
     single_day = [c for c in companies if c.trip_type != "two_day"]
 
+    # When group_first is enabled, sort by group_name so same-group companies
+    # end up in the same batch (scheduled on the same day).
+    if group_first:
+        two_day.sort(key=lambda c: c.group_name or "")
+        single_day.sort(key=lambda c: c.group_name or "")
+
     # Build sampling notes for each company from their contract detection items
     company_notes = {}
     for c in companies:
@@ -58,11 +64,10 @@ def generate_monthly_plan(db: Session, year: int, month: int, scheme: str = "bal
                 items_for_wp = []
                 for di in wp.detection_items:
                     if _is_plannable(di) and _is_due(di, month):
-                        level_tag = ""
-                        dl = getattr(di, "detection_level", None) or ""
-                        if dl:
-                            level_tag = f"({dl})"
-                        items_for_wp.append(f"{di.sample_type or '样品'}{level_tag}")
+                        count = di.frequency_value or 1
+                        proj = di.detection_project or ""
+                        inner = f"{proj}×{count}" if proj else f"×{count}"
+                        items_for_wp.append(f"{di.sample_type or '样品'}({inner})")
                 if items_for_wp:
                     notes_parts.append(f"{wp.name}: {'＋'.join(items_for_wp)}")
         company_notes[c.id] = "\n".join(notes_parts) if notes_parts else ""

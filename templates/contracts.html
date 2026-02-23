@@ -292,7 +292,11 @@ function addWpBlock() {
     div.className = 'dynamic-section';
     div.id = 'wp-' + idx;
     div.innerHTML =
-        '<div class="dynamic-section-header"><strong>水厂 #' + (idx+1) + '</strong><button class="btn btn-sm btn-danger" onclick="removeWp(' + idx + ')">移除</button></div>' +
+        '<div class="dynamic-section-header"><strong>水厂 #' + (idx+1) + '</strong><span style="margin-left:auto;display:flex;gap:4px;">' +
+        '<button class="btn btn-sm btn-outline" onclick="moveWpUp(' + idx + ')" title="上移">&#9650;</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="moveWpDown(' + idx + ')" title="下移">&#9660;</button>' +
+        '<button class="btn btn-sm btn-info" onclick="copyWpBlock(' + idx + ')">复制</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="removeWp(' + idx + ')">移除</button></span></div>' +
         '<div class="form-row"><div class="form-group"><label>水厂名称 *</label><input class="form-control wp-name" data-idx="' + idx + '"></div>' +
         '<div class="form-group"><label>规模</label><input class="form-control wp-scale" data-idx="' + idx + '"></div>' +
         '<div class="form-group"><label>采样点</label><input class="form-control wp-points" data-idx="' + idx + '"></div></div>' +
@@ -302,7 +306,65 @@ function addWpBlock() {
     document.getElementById('wpContainer').appendChild(div);
 }
 
-function removeWp(idx) { var el = document.getElementById('wp-' + idx); if (el) el.remove(); }
+function removeWp(idx) { var el = document.getElementById('wp-' + idx); if (el) el.remove(); renumberWp(); }
+
+function copyWpBlock(srcIdx) {
+    var src = document.getElementById('wp-' + srcIdx);
+    if (!src) return;
+    var wpName = src.querySelector('.wp-name').value;
+    var wpScale = src.querySelector('.wp-scale').value;
+    var wpPoints = src.querySelector('.wp-points').value;
+    // Collect detection items
+    var items = [];
+    var rows = src.querySelectorAll('#di-body-' + srcIdx + ' tr');
+    rows.forEach(function(row) {
+        function gf(n) { var el = row.querySelector('[name="' + n + '"]'); return el ? el.value : ''; }
+        items.push({
+            sample_type: gf('di_sample_type'),
+            detection_project: gf('di_detection_project'),
+            detection_level: gf('di_detection_level'),
+            detection_standard: gf('di_detection_standard'),
+            frequency_type: gf('di_frequency_type'),
+            frequency_value: parseInt(gf('di_frequency_value')) || 1,
+            unit_price: parseFloat(gf('di_unit_price')) || null,
+            annual_count: parseInt(gf('di_annual_count')) || null,
+            subtotal: parseFloat(gf('di_subtotal')) || null
+        });
+    });
+    // Create new block after source
+    var newIdx = wpIndex;
+    addWpBlock();
+    var newBlock = document.getElementById('wp-' + newIdx);
+    // Move it right after source
+    src.parentNode.insertBefore(newBlock, src.nextSibling);
+    newBlock.querySelector('.wp-name').value = wpName + '(副本)';
+    newBlock.querySelector('.wp-scale').value = wpScale;
+    newBlock.querySelector('.wp-points').value = wpPoints;
+    items.forEach(function(di) { addDiRow(newIdx, di); });
+    renumberWp();
+}
+
+function moveWpUp(idx) {
+    var el = document.getElementById('wp-' + idx);
+    if (!el || !el.previousElementSibling) return;
+    el.parentNode.insertBefore(el, el.previousElementSibling);
+    renumberWp();
+}
+
+function moveWpDown(idx) {
+    var el = document.getElementById('wp-' + idx);
+    if (!el || !el.nextElementSibling) return;
+    el.parentNode.insertBefore(el.nextElementSibling, el);
+    renumberWp();
+}
+
+function renumberWp() {
+    var blocks = document.querySelectorAll('#wpContainer .dynamic-section');
+    blocks.forEach(function(b, i) {
+        var strong = b.querySelector('.dynamic-section-header strong');
+        if (strong) strong.textContent = '水厂 #' + (i + 1);
+    });
+}
 
 function addDiRow(wpIdx, di) {
     var p = di || {};

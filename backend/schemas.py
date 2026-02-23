@@ -252,6 +252,7 @@ class MonthlyPlanGenerate(BaseModel):
     year: int
     month: int
     scheme: str = "balanced"  # compact / balanced / relaxed
+    group_first: bool = False  # 优先同集团一起采
 
 
 # ---------- Dashboard ----------

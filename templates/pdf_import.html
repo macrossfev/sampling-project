@@ -197,7 +197,11 @@ function addPlant(wp) {
     var nameCls = (wp && wp.name) ? 'parsed-field' : '';
     var scaleCls = (wp && wp.scale) ? 'parsed-field' : '';
 
-    var html = '<div class="section-plant-header"><h4>水厂 #' + (idx + 1) + '</h4><button class="btn btn-danger btn-sm" onclick="removePlant(' + idx + ')">删除水厂</button></div>';
+    var html = '<div class="section-plant-header"><h4>水厂 #' + (idx + 1) + '</h4><span style="display:flex;gap:4px;">' +
+        '<button class="btn btn-sm btn-outline" onclick="movePlantUp(' + idx + ')" title="上移">&#9650;</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="movePlantDown(' + idx + ')" title="下移">&#9660;</button>' +
+        '<button class="btn btn-sm btn-info" onclick="copyPlant(' + idx + ')">复制</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="removePlant(' + idx + ')">删除水厂</button></span></div>';
     html += '<div class="plant-inputs">';
     html += '<div class="form-group"><label>水厂名称</label><input class="form-control ' + nameCls + '" data-field="name" value="' + escHtml(nameVal) + '"></div>';
     html += '<div class="form-group"><label>规模</label><input class="form-control ' + scaleCls + '" data-field="scale" value="' + escHtml(scaleVal) + '"></div>';
@@ -221,6 +225,60 @@ function addPlant(wp) {
 function removePlant(idx) {
     var el = document.getElementById('plant-' + idx);
     if (el) el.remove();
+    renumberPlants();
+}
+
+function copyPlant(srcIdx) {
+    var src = document.getElementById('plant-' + srcIdx);
+    if (!src) return;
+    var nameVal = src.querySelector('[data-field="name"]').value;
+    var scaleVal = src.querySelector('[data-field="scale"]').value;
+    var spVal = src.querySelector('[data-field="sampling_points"]').value;
+    var items = [];
+    src.querySelectorAll('.item-table tbody tr').forEach(function(tr) {
+        items.push({
+            sample_type: getField(tr, 'sample_type'),
+            detection_project: getField(tr, 'detection_project'),
+            detection_level: getField(tr, 'detection_level'),
+            detection_standard: getField(tr, 'detection_standard'),
+            frequency_type: getField(tr, 'frequency_type'),
+            frequency_value: parseInt(getField(tr, 'frequency_value')) || 1,
+            unit_price: parseFloat(getField(tr, 'unit_price')) || null,
+            annual_count: parseInt(getField(tr, 'annual_count')) || null,
+        });
+    });
+    var wp = {name: nameVal + '(副本)', scale: scaleVal, items: items};
+    addPlant(wp);
+    // Move new block right after source
+    var newBlock = document.getElementById('plant-' + (plantIndex - 1));
+    if (newBlock && src.nextSibling) {
+        src.parentNode.insertBefore(newBlock, src.nextSibling);
+    }
+    // Set sampling_points manually (not in wp structure)
+    newBlock.querySelector('[data-field="sampling_points"]').value = spVal;
+    renumberPlants();
+}
+
+function movePlantUp(idx) {
+    var el = document.getElementById('plant-' + idx);
+    if (!el || !el.previousElementSibling) return;
+    el.parentNode.insertBefore(el, el.previousElementSibling);
+    renumberPlants();
+}
+
+function movePlantDown(idx) {
+    var el = document.getElementById('plant-' + idx);
+    if (!el || !el.nextElementSibling) return;
+    el.parentNode.insertBefore(el.nextElementSibling, el);
+    renumberPlants();
+}
+
+function renumberPlants() {
+    var blocks = document.querySelectorAll('#plantsContainer .section-plant');
+    blocks.forEach(function(b, i) {
+        var h4 = b.querySelector('.section-plant-header h4');
+        if (h4) h4.textContent = '水厂 #' + (i + 1);
+    });
 }
 
 function addItem(plantIdx, item) {

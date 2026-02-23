@@ -22,6 +22,8 @@
             </select>
         </div>
         <div class="form-group"><label>公司</label><select id="fCompany" class="form-control" onchange="loadTasks()"><option value="">全部</option></select></div>
+        <div class="form-group"><label>水厂</label><select id="fWaterPlant" class="form-control" onchange="filterLocal()"><option value="">全部</option></select></div>
+        <div class="form-group"><label>样品类别</label><select id="fSampleType" class="form-control" onchange="filterLocal()"><option value="">全部</option></select></div>
         <div class="form-group"><label>状态</label>
             <select id="fStatus" class="form-control" onchange="loadTasks()">
                 <option value="">全部</option><option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option><option value="已完成">已完成</option>
@@ -41,6 +43,8 @@
             <option value="待采样">待采样</option><option value="已采样">已采样</option><option value="已送检">已送检</option><option value="已出报告">已出报告</option><option value="已完成">已完成</option>
         </select>
         <button class="btn btn-sm btn-warning" onclick="batchUpdate()">批量更新</button>
+        <span style="border-left:1px solid #ddd;height:20px;margin:0 6px;"></span>
+        <button class="btn btn-sm btn-success" onclick="batchSamplingDone()">采样完成</button>
         <span id="selectedCount" style="font-size:12px;color:#888;margin-left:4px;">已选 0 项</span>
     </div>
 
@@ -166,17 +170,51 @@ function loadTasks() {
 
     api('/api/tasks' + (params.length ? '?' + params.join('&') : '')).then(function(list) {
         allTasks = list;
+        buildLocalFilters(list);
         currentPage = 1;
         selectedIds = {};
         updateSelectedCount();
-        renderPage();
+        filterLocal();
     }).catch(function(e) { showToast(e.detail || '加载失败', 'error'); });
 }
 
+var filteredTasks = [];
+
+function buildLocalFilters(list) {
+    var wps = {}, sts = {};
+    list.forEach(function(t) {
+        if (t.water_plant_name) wps[t.water_plant_name] = true;
+        if (t.sample_type) sts[t.sample_type] = true;
+    });
+    var wSel = document.getElementById('fWaterPlant');
+    var oldW = wSel.value;
+    wSel.innerHTML = '<option value="">全部</option>';
+    Object.keys(wps).sort().forEach(function(n) { wSel.innerHTML += '<option value="' + esc(n) + '">' + esc(n) + '</option>'; });
+    wSel.value = oldW;
+    var sSel = document.getElementById('fSampleType');
+    var oldS = sSel.value;
+    sSel.innerHTML = '<option value="">全部</option>';
+    Object.keys(sts).sort().forEach(function(n) { sSel.innerHTML += '<option value="' + esc(n) + '">' + esc(n) + '</option>'; });
+    sSel.value = oldS;
+}
+
+function filterLocal() {
+    var wp = document.getElementById('fWaterPlant').value;
+    var st = document.getElementById('fSampleType').value;
+    filteredTasks = allTasks.filter(function(t) {
+        if (wp && t.water_plant_name !== wp) return false;
+        if (st && t.sample_type !== st) return false;
+        return true;
+    });
+    currentPage = 1;
+    renderPage();
+}
+
 function renderPage() {
+    var src = filteredTasks.length ? filteredTasks : allTasks;
     var start = (currentPage - 1) * pageSize;
-    var page = allTasks.slice(start, start + pageSize);
-    var totalPages = Math.ceil(allTasks.length / pageSize) || 1;
+    var page = src.slice(start, start + pageSize);
+    var totalPages = Math.ceil(src.length / pageSize) || 1;
 
     var tbody = document.getElementById('taskBody');
     tbody.innerHTML = '';
@@ -209,9 +247,9 @@ function renderPage() {
     if (totalPages > 1) {
         var prevBtn = '<button class="btn btn-sm btn-outline"' + (currentPage <= 1 ? ' disabled' : '') + ' onclick="goPage(' + (currentPage-1) + ')">上一页</button>';
         var nextBtn = '<button class="btn btn-sm btn-outline"' + (currentPage >= totalPages ? ' disabled' : '') + ' onclick="goPage(' + (currentPage+1) + ')">下一页</button>';
-        pag.innerHTML = prevBtn + '<span class="page-info">第 ' + currentPage + ' / ' + totalPages + ' 页，共 ' + allTasks.length + ' 条</span>' + nextBtn;
-    } else if (allTasks.length > 0) {
-        pag.innerHTML = '<span class="page-info">共 ' + allTasks.length + ' 条</span>';
+        pag.innerHTML = prevBtn + '<span class="page-info">第 ' + currentPage + ' / ' + totalPages + ' 页，共 ' + src.length + ' 条</span>' + nextBtn;
+    } else if (src.length > 0) {
+        pag.innerHTML = '<span class="page-info">共 ' + src.length + ' 条</span>';
     }
 
     // Update checkAll
@@ -256,6 +294,19 @@ function batchUpdate() {
     var status = document.getElementById('batchStatus').value;
     apiJSON('/api/tasks/batch-status', 'PATCH', { task_ids: ids, status: status }).then(function() {
         showToast('批量更新成功');
+        selectedIds = {};
+        updateSelectedCount();
+        loadTasks();
+    }).catch(function(e) { showToast(e.detail || '更新失败', 'error'); });
+}
+
+function batchSamplingDone() {
+    var ids = Object.keys(selectedIds).map(Number);
+    if (!ids.length) { showToast('请先选择任务', 'error'); return; }
+    if (!confirm('确认将选中的 ' + ids.length + ' 项任务标记为"已采样"？')) return;
+    var today = new Date().toISOString().slice(0, 10);
+    apiJSON('/api/tasks/batch-status', 'PATCH', { task_ids: ids, status: '已采样' }).then(function() {
+        showToast('已标记 ' + ids.length + ' 项为采样完成', 'success');
         selectedIds = {};
         updateSelectedCount();
         loadTasks();

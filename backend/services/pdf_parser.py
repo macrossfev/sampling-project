@@ -268,8 +268,8 @@ def _parse_fee_tables(tables: list) -> list:
             else:
                 wp_name = "未知水厂"
 
-            sample_type = _get_col(cells, col_map, "sample_type")
-            detection_project = _get_col(cells, col_map, "detection_project")
+            sample_type = _normalize_sample_type(_get_col(cells, col_map, "sample_type"))
+            detection_project = _normalize_detection_project(_get_col(cells, col_map, "detection_project"))
             detection_standard = _get_col(cells, col_map, "detection_standard")
             frequency_raw = _get_col(cells, col_map, "frequency")
             unit_price = _get_col_float(cells, col_map, "unit_price")
@@ -305,6 +305,25 @@ def _parse_fee_tables(tables: list) -> list:
             })
 
     return list(plants.values())
+
+
+def _normalize_sample_type(s: str) -> str:
+    if not s:
+        return s
+    if "管网末梢" in s:
+        return "管网水"
+    if re.search(r'水源水[（(]原水[）)]', s):
+        return "水源水"
+    return s
+
+
+def _normalize_detection_project(s: str) -> str:
+    if not s:
+        return s
+    m = re.search(r'(\d+)\s*项', s)
+    if m:
+        return f"{m.group(1)}项"
+    return s
 
 
 def _find_header_row(table: list) -> int | None:

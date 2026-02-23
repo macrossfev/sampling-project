@@ -180,10 +180,9 @@ def delete_contract(contract_id: int, db: Session = Depends(get_db)):
                 SamplingTask.detection_item_id.in_(di_id_list)
             ).delete(synchronize_session="fetch")
 
-    # Also delete tasks matched by contract_no
+    # Also delete ALL tasks matched by contract_no (orphan cleanup)
     db.query(SamplingTask).filter(
         SamplingTask.contract_no == contract.contract_no,
-        SamplingTask.source == "contract",
     ).delete(synchronize_session="fetch")
 
     # Delete contract (cascade handles water_plants and detection_items)

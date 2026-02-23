@@ -1,3 +1,4 @@
+import re
 from io import BytesIO
 from datetime import date
 from collections import OrderedDict
@@ -92,8 +93,8 @@ def parse_excel(file_bytes: bytes) -> dict:
         subtotal = _cell_float(row, col_map["小计"])
 
         item = {
-            "sample_type": _cell_str(row, col_map["样品类别"]),
-            "detection_project": _cell_str(row, col_map["检测项目"]),
+            "sample_type": _normalize_sample_type(_cell_str(row, col_map["样品类别"])),
+            "detection_project": _normalize_detection_project(_cell_str(row, col_map["检测项目"])),
             "detection_standard": _cell_str(row, col_map["检测标准"]),
             "frequency_type": freq_type,
             "frequency_value": freq_value,
@@ -203,6 +204,27 @@ def generate_template() -> bytes:
     wb.save(buffer)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+# ---- normalization ----
+
+def _normalize_sample_type(s: str) -> str:
+    if not s:
+        return s
+    if "管网末梢" in s:
+        return "管网水"
+    if re.search(r'水源水[（(]原水[）)]', s):
+        return "水源水"
+    return s
+
+
+def _normalize_detection_project(s: str) -> str:
+    if not s:
+        return s
+    m = re.search(r'(\d+)\s*项', s)
+    if m:
+        return f"{m.group(1)}项"
+    return s
 
 
 # ---- helpers ----

@@ -47,7 +47,7 @@ def list_trips(
 def generate_plan(data: MonthlyPlanGenerate, db: Session = Depends(get_db)):
     if data.scheme not in ("compact", "balanced", "relaxed"):
         raise HTTPException(status_code=400, detail="scheme must be compact/balanced/relaxed")
-    result = generate_monthly_plan(db, data.year, data.month, data.scheme)
+    result = generate_monthly_plan(db, data.year, data.month, data.scheme, data.group_first)
     return result
 
 
@@ -57,6 +57,8 @@ def export_excel(
     month: int = Query(...),
     db: Session = Depends(get_db),
 ):
+    import calendar as _cal
+
     trips = db.query(SamplingTrip).filter(
         SamplingTrip.year == year,
         SamplingTrip.month == month,
@@ -65,21 +67,40 @@ def export_excel(
     max_group = max((t.group_no for t in trips), default=1)
     group_names = ['第一组','第二组','第三组','第四组','第五组','第六组','第七组','第八组']
 
-    # Group by start_date
-    date_groups = {}
+    # Build day map: every day of month, with two-day trips split into 去程/返程
+    _, days_in_month = _cal.monthrange(year, month)
+    from datetime import date as _date
+    day_map = {}
+    for d in range(1, days_in_month + 1):
+        day_map[_date(year, month, d)] = {}
+
     for t in trips:
-        key = str(t.start_date)
-        if key not in date_groups:
-            date_groups[key] = {}
         company = db.query(Company).filter(Company.id == t.company_id).first()
         cname = (company.short_name or company.name) if company else '--'
-        date_groups[key][t.group_no] = {
-            'company': cname,
-            'trip_type': '两日' if t.trip_type == 'two_day' else '当日',
-            'dates': f"{t.start_date.month}.{t.start_date.day}" if t.start_date == t.end_date else f"{t.start_date.month}.{t.start_date.day}-{t.end_date.month}.{t.end_date.day}",
-            'route': t.route_notes or '',
-            'samples': t.sampling_notes or '',
-        }
+        route_lines = (t.route_notes or '').split('\n')
+
+        if t.trip_type == 'two_day' and t.start_date != t.end_date:
+            # Outbound day
+            if t.start_date in day_map:
+                day_map[t.start_date][t.group_no] = {
+                    'company': cname, 'trip_type': '去程',
+                    'route': route_lines[0] if route_lines else '',
+                    'samples': t.sampling_notes or '',
+                }
+            # Return day
+            if t.end_date in day_map:
+                day_map[t.end_date][t.group_no] = {
+                    'company': cname, 'trip_type': '返程',
+                    'route': route_lines[1] if len(route_lines) > 1 else '',
+                    'samples': '',
+                }
+        else:
+            if t.start_date in day_map:
+                day_map[t.start_date][t.group_no] = {
+                    'company': cname, 'trip_type': '当日',
+                    'route': t.route_notes or '',
+                    'samples': t.sampling_notes or '',
+                }
 
     wb = Workbook()
     ws = wb.active
@@ -91,6 +112,7 @@ def export_excel(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin'),
     )
+    weekday_names = ['一','二','三','四','五','六','日']
 
     # Header row
     headers = ['日期'] + group_names[:max_group]
@@ -101,28 +123,42 @@ def export_excel(
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
 
-    ws.column_dimensions['A'].width = 10
+    ws.column_dimensions['A'].width = 12
     for i in range(max_group):
         ws.column_dimensions[chr(66+i)].width = 30
 
-    sorted_dates = sorted(date_groups.keys())
-    for row_idx, dt in enumerate(sorted_dates, 2):
-        parts = dt.split('-')
-        label = f"{int(parts[1])}.{int(parts[2])}"
+    weekend_fill = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
+
+    for row_idx, d in enumerate(range(1, days_in_month + 1), 2):
+        dt = _date(year, month, d)
+        wd = dt.weekday()
+        is_weekend = wd >= 5
+        label = f"{month}.{d} {weekday_names[wd]}"
+        has_trips = bool(day_map.get(dt))
+
         cell = ws.cell(row=row_idx, column=1, value=label)
         cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.font = Font(bold=True)
+        cell.font = Font(bold=not is_weekend, color="BBBBBB" if is_weekend else "000000")
         cell.border = thin_border
+        if is_weekend:
+            cell.fill = weekend_fill
+
+        if has_trips:
+            ws.row_dimensions[row_idx].height = 60
+        else:
+            ws.row_dimensions[row_idx].height = 18
 
         for g in range(1, max_group + 1):
-            info = date_groups[dt].get(g)
+            info = day_map.get(dt, {}).get(g)
             if info:
-                text = f"[{info['trip_type']}] {info['company']}\n{info['dates']}\n{info['route']}\n{info['samples']}"
+                text = f"[{info['trip_type']}] {info['company']}\n{info['route']}\n{info['samples']}"
                 cell = ws.cell(row=row_idx, column=g+1, value=text.strip())
                 cell.alignment = Alignment(wrap_text=True, vertical='top')
             else:
                 cell = ws.cell(row=row_idx, column=g+1, value='')
             cell.border = thin_border
+            if is_weekend:
+                cell.fill = weekend_fill
 
     buf = BytesIO()
     wb.save(buf)

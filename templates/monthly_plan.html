@@ -22,6 +22,12 @@
 .trip-cell .tc-actions { margin-top:6px; text-align:right; }
 .trip-cell .tc-actions button { font-size:10px; padding:2px 6px; }
 .empty-cell { color:#bbb; text-align:center; padding-top:30px; font-style:italic; }
+.empty-day-row td { padding:1px 4px !important; height:18px; }
+.empty-day-row .row-header { font-size:11px; color:#999; font-weight:normal; }
+.weekend-row td { background:#f9f9f9; }
+.weekend-row .row-header { color:#ccc !important; }
+.tag-outbound { background:#fff3e0; color:#e65100; }
+.tag-return { background:#fce4ec; color:#c62828; }
 #planStatus { margin-top:16px; font-size:13px; }
 .stats-bar { display:flex; gap:16px; margin-bottom:12px; font-size:13px; color:#555; }
 .stats-bar b { color:#1a237e; }
@@ -45,6 +51,7 @@
             <option value="balanced" selected>均衡方案</option>
             <option value="relaxed">宽松方案</option>
         </select>
+        <label style="font-size:13px;margin-left:8px;cursor:pointer;"><input type="checkbox" id="groupFirst" style="vertical-align:middle;margin-right:3px;">优先同集团一起采</label>
         <button class="btn btn-primary" onclick="generatePlan()">生成计划</button>
         <button class="btn btn-outline" onclick="addTrip()">+ 手动添加</button>
         <button class="btn btn-success" onclick="exportExcel()">导出Excel</button>
@@ -168,15 +175,22 @@ function renderGrid(trips) {
     var head = document.getElementById('planHead');
     var body = document.getElementById('planBody');
     var bar = document.getElementById('statsBar');
+    var y = parseInt(document.getElementById('planYear').value);
+    var m = parseInt(document.getElementById('planMonth').value);
+    var daysInMonth = new Date(y, m, 0).getDate();
+    var weekNames = ['日','一','二','三','四','五','六'];
+
     // Find max group_no dynamically
     var maxG = 0;
     trips.forEach(function(t){ if (t.group_no > maxG) maxG = t.group_no; });
     if (maxG < 1) maxG = 1;
+
     // Build dynamic header
-    var hhtml = '<tr><th class="row-header">日期</th>';
+    var hhtml = '<tr><th class="row-header" style="width:70px;">日期</th>';
     for (var g = 1; g <= maxG; g++) hhtml += '<th>第'+['一','二','三','四','五','六','七','八','九','十'][g-1]+'组</th>';
     hhtml += '</tr>';
     head.innerHTML = hhtml;
+
     if (!trips || trips.length === 0) {
         body.innerHTML = '<tr><td colspan="'+(maxG+1)+'" class="empty-cell">暂无计划，请点击"生成计划"</td></tr>';
         bar.style.display = 'none'; return;
@@ -185,33 +199,79 @@ function renderGrid(trips) {
     document.getElementById('statTotal').textContent = trips.length;
     document.getElementById('statTwo').textContent = trips.filter(function(t){return t.trip_type==='two_day';}).length;
     document.getElementById('statSingle').textContent = trips.filter(function(t){return t.trip_type!=='two_day';}).length;
-    // Group by date range
-    var dateGroups = {};
+
+    // Build day map: every day of month
+    // For two-day trips, split into outbound (start_date) and return (end_date)
+    var dayMap = {};
+    for (var d = 1; d <= daysInMonth; d++) {
+        var dd = d < 10 ? '0'+d : ''+d;
+        var mm = m < 10 ? '0'+m : ''+m;
+        dayMap[y+'-'+mm+'-'+dd] = {};
+    }
+
     trips.forEach(function(t) {
-        var key = t.start_date;
-        if (!dateGroups[key]) dateGroups[key] = {start:t.start_date, cells:{}};
-        dateGroups[key].cells[t.group_no] = t;
-    });
-    var rows = Object.values(dateGroups).sort(function(a,b){ return a.start < b.start ? -1 : 1; });
-    var html = '';
-    rows.forEach(function(row) {
-        var sp=row.start.split('-'); var label=parseInt(sp[1])+'.'+parseInt(sp[2]);
-        html += '<tr><td class="row-header" style="text-align:center;font-weight:600;font-size:12px;">'+label+'</td>';
-        for (var g = 1; g <= maxG; g++) {
-            var t = row.cells[g];
-            if (t) {
-                var tagCls = t.trip_type==='two_day'?'tag-two':'tag-single';
-                var tagTxt = t.trip_type==='two_day'?'两日':'当日';
-                html += '<td class="trip-cell"><span class="tc-tag '+tagCls+'">'+tagTxt+'</span>';
-                html += '<div class="tc-company">'+(t.company_short_name||t.company_name||'--')+'</div>';
-                html += '<div class="tc-dates">'+fmtRange(t.start_date,t.end_date)+'</div>';
-                if (t.route_notes) html += '<div class="tc-route">'+esc(t.route_notes)+'</div>';
-                if (t.sampling_notes) html += '<div class="tc-samples">'+esc(t.sampling_notes)+'</div>';
-                html += '<div class="tc-actions"><button class="btn btn-info btn-sm" onclick="editTrip('+t.id+')">编辑</button></div></td>';
-            } else { html += '<td class="empty-cell">-</td>'; }
+        if (t.trip_type === 'two_day' && t.start_date !== t.end_date) {
+            // Outbound day
+            if (dayMap[t.start_date]) {
+                dayMap[t.start_date][t.group_no] = {id:t.id, phase:'outbound', company:t.company_short_name||t.company_name||'--',
+                    route:(t.route_notes||'').split('\n')[0]||'', samples:t.sampling_notes||''};
+            }
+            // Return day
+            if (dayMap[t.end_date]) {
+                dayMap[t.end_date][t.group_no] = {id:t.id, phase:'return', company:t.company_short_name||t.company_name||'--',
+                    route:(t.route_notes||'').split('\n')[1]||(t.route_notes||'').split('\n')[0]||'', samples:''};
+            }
+        } else {
+            if (dayMap[t.start_date]) {
+                dayMap[t.start_date][t.group_no] = {id:t.id, phase:'single', company:t.company_short_name||t.company_name||'--',
+                    route:t.route_notes||'', samples:t.sampling_notes||''};
+            }
         }
-        html += '</tr>';
     });
+
+    // Render all days
+    var html = '';
+    for (var d = 1; d <= daysInMonth; d++) {
+        var dd = d < 10 ? '0'+d : ''+d;
+        var mm = m < 10 ? '0'+m : ''+m;
+        var key = y+'-'+mm+'-'+dd;
+        var cells = dayMap[key] || {};
+        var hasTrips = Object.keys(cells).length > 0;
+        var dt = new Date(y, m-1, d);
+        var wd = dt.getDay();
+        var isWeekend = (wd === 0 || wd === 6);
+        var dayLabel = m+'.'+d+' '+weekNames[wd];
+
+        if (!hasTrips) {
+            // Empty row - minimal height
+            var rowCls = 'empty-day-row' + (isWeekend ? ' weekend-row' : '');
+            html += '<tr class="'+rowCls+'">';
+            html += '<td class="row-header" style="text-align:center;">'+dayLabel+'</td>';
+            for (var g = 1; g <= maxG; g++) html += '<td></td>';
+            html += '</tr>';
+        } else {
+            var rowCls = isWeekend ? ' class="weekend-row"' : '';
+            html += '<tr'+rowCls+'>';
+            html += '<td class="row-header" style="text-align:center;font-weight:600;font-size:12px;">'+dayLabel+'</td>';
+            for (var g = 1; g <= maxG; g++) {
+                var c = cells[g];
+                if (c) {
+                    var tagCls, tagTxt;
+                    if (c.phase === 'outbound') { tagCls='tag-outbound'; tagTxt='去程'; }
+                    else if (c.phase === 'return') { tagCls='tag-return'; tagTxt='返程'; }
+                    else { tagCls='tag-single'; tagTxt='往返'; }
+                    html += '<td class="trip-cell"><span class="tc-tag '+tagCls+'">'+tagTxt+'</span>';
+                    html += '<div class="tc-company">'+esc(c.company)+'</div>';
+                    if (c.route) html += '<div class="tc-route">'+esc(c.route)+'</div>';
+                    if (c.samples) html += '<div class="tc-samples">'+esc(c.samples)+'</div>';
+                    html += '<div class="tc-actions"><button class="btn btn-info btn-sm" onclick="editTrip('+c.id+')">编辑</button></div></td>';
+                } else {
+                    html += '<td></td>';
+                }
+            }
+            html += '</tr>';
+        }
+    }
     body.innerHTML = html;
 }
 
@@ -276,8 +336,11 @@ document.addEventListener('DOMContentLoaded', function(){
 function generatePlan() {
     var y=document.getElementById('planYear').value, m=document.getElementById('planMonth').value;
     var scheme=document.getElementById('schemeSelect').value;
-    if (!confirm('将重新生成 '+y+'年'+m+'月 的采样计划（'+{compact:'紧凑',balanced:'均衡',relaxed:'宽松'}[scheme]+'方案），已有计划会被覆盖，确定？')) return;
-    apiJSON('/api/monthly-plan/generate','POST',{year:parseInt(y),month:parseInt(m),scheme:scheme})
+    var groupFirst=document.getElementById('groupFirst').checked;
+    var schemeName={compact:'紧凑',balanced:'均衡',relaxed:'宽松'}[scheme];
+    var extra=groupFirst?' + 同集团优先':'';
+    if (!confirm('将重新生成 '+y+'年'+m+'月 的采样计划（'+schemeName+extra+'），已有计划会被覆盖，确定？')) return;
+    apiJSON('/api/monthly-plan/generate','POST',{year:parseInt(y),month:parseInt(m),scheme:scheme,group_first:groupFirst})
     .then(function(r){ showToast('已生成 '+r.trips+' 个行程','success'); loadPlan(); })
     .catch(function(e){ showToast(e.detail||'生成失败','error'); });
 }

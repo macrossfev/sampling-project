@@ -1,7 +1,7 @@
 from datetime import date
 from sqlalchemy.orm import Session
 from backend.models import Contract, DetectionItem, SamplingTask, WaterPlant
-from backend.services.monthly_planner import _is_plannable
+from backend.services.monthly_planner import _is_plannable, _is_due, _FULL_ANALYSIS_MONTHS
 
 
 def generate_annual_plan(db: Session, contract_id: int) -> int:
@@ -77,9 +77,18 @@ def generate_annual_plan(db: Session, contract_id: int) -> int:
         for item in detection_items:
             if not _is_plannable(item):
                 continue
-            months = _get_months_for_frequency(
-                item.frequency_type, valid_months, plan_year
-            )
+            level = (item.detection_level or "").strip()
+            if level == "全分析":
+                # 全分析 months are determined by the full-analysis schedule,
+                # not by frequency_type (e.g. 半年 gives [6,12] but full
+                # analysis is actually [6,11]).
+                months = [m for m in _FULL_ANALYSIS_MONTHS if m in valid_months]
+            else:
+                months = _get_months_for_frequency(
+                    item.frequency_type, valid_months, plan_year
+                )
+                # 常规 skips full-analysis months (replaced by 全分析)
+                months = [m for m in months if _is_due(item, m)]
             freq_value = item.frequency_value or 1
 
             for m in months:
