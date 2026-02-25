@@ -55,6 +55,24 @@
                 <div class="form-group"><label>开始日期</label><input class="form-control" type="date" id="cm_start_date"></div>
                 <div class="form-group"><label>结束日期</label><input class="form-control" type="date" id="cm_end_date"></div>
             </div>
+            <div class="form-row">
+                <div class="form-group"><label>全分析月份</label>
+                    <div id="cm_fa_months" style="display:flex;flex-wrap:wrap;gap:4px;">
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="1月"><input type="checkbox" class="fa-month-cb" value="1"> 1月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="2月"><input type="checkbox" class="fa-month-cb" value="2"> 2月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="3月"><input type="checkbox" class="fa-month-cb" value="3"> 3月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="4月"><input type="checkbox" class="fa-month-cb" value="4"> 4月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="5月"><input type="checkbox" class="fa-month-cb" value="5"> 5月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="6月"><input type="checkbox" class="fa-month-cb" value="6"> 6月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="7月"><input type="checkbox" class="fa-month-cb" value="7"> 7月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="8月"><input type="checkbox" class="fa-month-cb" value="8"> 8月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="9月"><input type="checkbox" class="fa-month-cb" value="9"> 9月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="10月"><input type="checkbox" class="fa-month-cb" value="10"> 10月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="11月"><input type="checkbox" class="fa-month-cb" value="11"> 11月</label>
+                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="12月"><input type="checkbox" class="fa-month-cb" value="12"> 12月</label>
+                    </div>
+                </div>
+            </div>
             <div class="form-group"><label>备注</label><textarea class="form-control" id="cm_notes" rows="2" placeholder="合同备注信息"></textarea></div>
 
             <div class="flex-between mt-10" style="margin-top:18px;">
@@ -100,6 +118,16 @@
 <script>
 var companies = [];
 var expandedRows = {};
+
+function setFaMonths(str) {
+    var vals = (str || '6,11').split(',').map(function(s){ return s.trim(); });
+    document.querySelectorAll('.fa-month-cb').forEach(function(cb){ cb.checked = vals.indexOf(cb.value) >= 0; });
+}
+function getFaMonths() {
+    var arr = [];
+    document.querySelectorAll('.fa-month-cb').forEach(function(cb){ if (cb.checked) arr.push(cb.value); });
+    return arr.join(',') || '6,11';
+}
 
 function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -281,6 +309,7 @@ function openAddContract() {
     document.getElementById('cm_start_date').value = '';
     document.getElementById('cm_end_date').value = '';
     document.getElementById('cm_notes').value = '';
+    setFaMonths('6,11');
     document.getElementById('wpContainer').innerHTML = '';
     wpIndex = 0;
     openModal('contractModal');
@@ -452,6 +481,7 @@ function saveContract() {
         start_date: document.getElementById('cm_start_date').value || null,
         end_date: document.getElementById('cm_end_date').value || null,
         total_amount: parseFloat(document.getElementById('cm_total_amount').value) || null,
+        full_analysis_months: getFaMonths(),
         notes: document.getElementById('cm_notes').value.trim() || null,
         water_plants: water_plants
     };
@@ -479,6 +509,7 @@ function openEditContract(id) {
         document.getElementById('cm_start_date').value = c.start_date || '';
         document.getElementById('cm_end_date').value = c.end_date || '';
         document.getElementById('cm_notes').value = c.notes || '';
+        setFaMonths(c.full_analysis_months || '6,11');
         document.getElementById('wpContainer').innerHTML = '';
         wpIndex = 0;
         if (c.water_plants && c.water_plants.length) {

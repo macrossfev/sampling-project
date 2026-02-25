@@ -102,6 +102,7 @@ class ContractCreate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     total_amount: Optional[float] = None
+    full_analysis_months: Optional[str] = "6,11"
     notes: Optional[str] = None
     water_plants: Optional[List[WaterPlantCreate]] = None
 
@@ -113,6 +114,7 @@ class ContractUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     total_amount: Optional[float] = None
+    full_analysis_months: Optional[str] = None
     notes: Optional[str] = None
     water_plants: Optional[List[WaterPlantCreate]] = None
 
@@ -127,6 +129,7 @@ class ContractResponse(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     total_amount: Optional[float] = None
+    full_analysis_months: Optional[str] = "6,11"
     notes: Optional[str] = None
     created_at: Optional[datetime] = None
     water_plants: List[WaterPlantResponse] = []
@@ -142,6 +145,7 @@ class ContractListResponse(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     total_amount: Optional[float] = None
+    full_analysis_months: Optional[str] = "6,11"
     notes: Optional[str] = None
     created_at: Optional[datetime] = None
 

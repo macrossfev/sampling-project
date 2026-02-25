@@ -32,6 +32,7 @@ class Contract(Base):
     start_date = Column(Date)
     end_date = Column(Date)
     total_amount = Column(Float)
+    full_analysis_months = Column(String(50), default="6,11")
     notes = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
 

@@ -1,7 +1,21 @@
 from datetime import date
 from sqlalchemy.orm import Session
 from backend.models import Contract, DetectionItem, SamplingTask, WaterPlant
-from backend.services.monthly_planner import _is_plannable, _is_due, _FULL_ANALYSIS_MONTHS
+from backend.services.monthly_planner import _is_plannable
+
+_DEFAULT_FULL_ANALYSIS_MONTHS = [6, 11]
+
+
+def _parse_full_analysis_months(raw: str | None) -> list[int]:
+    """Parse comma-separated month string like '6,11' into a list of ints.
+    Falls back to default [6, 11] on empty or invalid input."""
+    if not raw or not raw.strip():
+        return list(_DEFAULT_FULL_ANALYSIS_MONTHS)
+    try:
+        months = [int(m.strip()) for m in raw.split(",") if m.strip()]
+        return sorted(m for m in months if 1 <= m <= 12) or list(_DEFAULT_FULL_ANALYSIS_MONTHS)
+    except ValueError:
+        return list(_DEFAULT_FULL_ANALYSIS_MONTHS)
 
 
 def generate_annual_plan(db: Session, contract_id: int) -> int:
@@ -33,6 +47,9 @@ def generate_annual_plan(db: Session, contract_id: int) -> int:
         end_year = start_year
 
     plan_year = contract.year or start_year
+
+    # Parse per-contract full-analysis months
+    fa_months = _parse_full_analysis_months(getattr(contract, "full_analysis_months", None))
 
     # Delete existing contract-sourced tasks for this contract
     existing_task_ids = (
@@ -79,16 +96,14 @@ def generate_annual_plan(db: Session, contract_id: int) -> int:
                 continue
             level = (item.detection_level or "").strip()
             if level == "全分析":
-                # 全分析 months are determined by the full-analysis schedule,
-                # not by frequency_type (e.g. 半年 gives [6,12] but full
-                # analysis is actually [6,11]).
-                months = [m for m in _FULL_ANALYSIS_MONTHS if m in valid_months]
+                # 全分析 months from contract-level setting
+                months = [m for m in fa_months if m in valid_months]
             else:
                 months = _get_months_for_frequency(
                     item.frequency_type, valid_months, plan_year
                 )
                 # 常规 skips full-analysis months (replaced by 全分析)
-                months = [m for m in months if _is_due(item, m)]
+                months = [m for m in months if m not in fa_months]
             freq_value = item.frequency_value or 1
 
             for m in months:
