@@ -39,7 +39,7 @@
 
 <!-- Add/Edit Contract Modal -->
 <div class="modal-overlay" id="contractModal">
-    <div class="modal" style="width:800px;">
+    <div class="modal" style="width:1100px;max-width:98vw;max-height:88vh;">
         <div class="modal-header"><h3 id="cmTitle">新增合同</h3><button class="modal-close" onclick="closeModal('contractModal')">&times;</button></div>
         <div class="modal-body">
             <input type="hidden" id="cmId">
@@ -49,29 +49,11 @@
             </div>
             <div class="form-row">
                 <div class="form-group"><label>年度</label><input class="form-control" type="number" id="cm_year" value="2026"></div>
-                <div class="form-group"><label>总金额</label><input class="form-control" type="number" step="0.01" id="cm_total_amount"></div>
+                <div class="form-group"><label>总金额(万元)</label><input class="form-control" type="number" step="0.0001" id="cm_total_amount"></div>
             </div>
             <div class="form-row">
                 <div class="form-group"><label>开始日期</label><input class="form-control" type="date" id="cm_start_date"></div>
                 <div class="form-group"><label>结束日期</label><input class="form-control" type="date" id="cm_end_date"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label>全分析月份</label>
-                    <div id="cm_fa_months" style="display:flex;flex-wrap:wrap;gap:4px;">
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="1月"><input type="checkbox" class="fa-month-cb" value="1"> 1月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="2月"><input type="checkbox" class="fa-month-cb" value="2"> 2月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="3月"><input type="checkbox" class="fa-month-cb" value="3"> 3月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="4月"><input type="checkbox" class="fa-month-cb" value="4"> 4月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="5月"><input type="checkbox" class="fa-month-cb" value="5"> 5月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="6月"><input type="checkbox" class="fa-month-cb" value="6"> 6月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="7月"><input type="checkbox" class="fa-month-cb" value="7"> 7月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="8月"><input type="checkbox" class="fa-month-cb" value="8"> 8月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="9月"><input type="checkbox" class="fa-month-cb" value="9"> 9月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="10月"><input type="checkbox" class="fa-month-cb" value="10"> 10月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="11月"><input type="checkbox" class="fa-month-cb" value="11"> 11月</label>
-                        <label style="width:52px;font-weight:normal;cursor:pointer;" title="12月"><input type="checkbox" class="fa-month-cb" value="12"> 12月</label>
-                    </div>
-                </div>
             </div>
             <div class="form-group"><label>备注</label><textarea class="form-control" id="cm_notes" rows="2" placeholder="合同备注信息"></textarea></div>
 
@@ -102,7 +84,7 @@
                 <div class="form-group"><label>开始日期</label><input class="form-control" type="date" id="imp_start_date"></div>
                 <div class="form-group"><label>结束日期</label><input class="form-control" type="date" id="imp_end_date"></div>
             </div>
-            <div class="form-group"><label>总金额</label><input class="form-control" type="number" step="0.01" id="imp_total_amount"></div>
+            <div class="form-group"><label>总金额(万元)</label><input class="form-control" type="number" step="0.0001" id="imp_total_amount"></div>
             <div class="form-group"><label>Excel文件 *</label><input type="file" id="imp_file" accept=".xlsx,.xls" class="form-control"></div>
             <div style="margin-top:6px;"><a href="/api/import/template" class="btn btn-sm btn-outline">下载模板</a></div>
         </div>
@@ -119,15 +101,6 @@
 var companies = [];
 var expandedRows = {};
 
-function setFaMonths(str) {
-    var vals = (str || '6,11').split(',').map(function(s){ return s.trim(); });
-    document.querySelectorAll('.fa-month-cb').forEach(function(cb){ cb.checked = vals.indexOf(cb.value) >= 0; });
-}
-function getFaMonths() {
-    var arr = [];
-    document.querySelectorAll('.fa-month-cb').forEach(function(cb){ if (cb.checked) arr.push(cb.value); });
-    return arr.join(',') || '6,11';
-}
 
 function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -214,7 +187,7 @@ function loadContracts() {
         if (!list.length) { tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="color:#999;padding:30px;">暂无数据</td></tr>'; return; }
         list.forEach(function(c) {
             var period = (c.start_date || '-') + ' ~ ' + (c.end_date || '-');
-            var amount = c.total_amount != null ? c.total_amount.toLocaleString() + ' 元' : '-';
+            var amount = c.total_amount != null ? Number(c.total_amount).toFixed(4) + ' 万元' : '-';
             var tr = document.createElement('tr');
             tr.id = 'row-' + c.id;
             tr.innerHTML = '<td>' + esc(c.contract_no) + '</td><td>' + esc(companyGroup(c.company_id)) + '</td><td>' + esc(companyName(c.company_id)) + '</td><td>' + (c.year||'-') + '</td>' +
@@ -262,10 +235,11 @@ function loadDetailRow(id, tbody) {
             c.water_plants.forEach(function(wp) {
                 html += '<div class="wp-block"><div class="wp-block-head"><strong>' + esc(wp.name) + '</strong><span style="color:#888;font-size:12px;">规模: ' + esc(wp.scale) + ' | 采样点: ' + esc(wp.sampling_points) + '</span></div>';
                 if (wp.detection_items && wp.detection_items.length) {
-                    html += '<table class="items-table"><thead><tr><th>样品类别</th><th>检测项目</th><th>检测级别</th><th>检测标准</th><th>频次类型</th><th>频次</th><th>单价</th><th>年次数</th><th>小计</th></tr></thead><tbody>';
+                    html += '<table class="items-table"><thead><tr><th>样品类别</th><th>检测项目</th><th>采样月份</th><th>个数</th><th>单价(万元)</th><th>年次数</th><th>小计(万元)</th></tr></thead><tbody>';
                     wp.detection_items.forEach(function(di) {
-                        html += '<tr><td>' + esc(di.sample_type) + '</td><td>' + esc(di.detection_project) + '</td><td>' + esc(di.detection_level) + '</td><td>' + esc(di.detection_standard) + '</td>' +
-                            '<td>' + esc(di.frequency_type) + '</td><td>' + di.frequency_value + '</td><td>' + (di.unit_price||'-') + '</td><td>' + (di.annual_count||'-') + '</td><td>' + (di.subtotal||'-') + '</td></tr>';
+                        var cmDisplay = di.custom_months ? di.custom_months.replace(/,/g, '、') + '月' : '默认';
+                        html += '<tr><td>' + esc(di.sample_type) + '</td><td>' + esc(di.detection_project) + '</td>' +
+                            '<td>' + cmDisplay + '</td><td>' + di.frequency_value + '</td><td>' + (di.unit_price||'-') + '</td><td>' + (di.annual_count||'-') + '</td><td>' + (di.subtotal||'-') + '</td></tr>';
                     });
                     html += '</tbody></table>';
                 } else {
@@ -309,7 +283,6 @@ function openAddContract() {
     document.getElementById('cm_start_date').value = '';
     document.getElementById('cm_end_date').value = '';
     document.getElementById('cm_notes').value = '';
-    setFaMonths('6,11');
     document.getElementById('wpContainer').innerHTML = '';
     wpIndex = 0;
     openModal('contractModal');
@@ -330,7 +303,7 @@ function addWpBlock() {
         '<div class="form-group"><label>规模</label><input class="form-control wp-scale" data-idx="' + idx + '"></div>' +
         '<div class="form-group"><label>采样点</label><input class="form-control wp-points" data-idx="' + idx + '"></div></div>' +
         '<div class="flex-between mt-10"><span style="font-size:13px;font-weight:600;">检测项目</span><button class="btn btn-sm btn-success" onclick="addDiRow(' + idx + ')">+ 添加项目</button></div>' +
-        '<table class="items-table" style="margin-top:6px;"><thead><tr><th>样品类别</th><th>检测项目</th><th>检测级别</th><th>检测标准</th><th>频次类型</th><th>频次</th><th>单价</th><th>年次数</th><th>小计</th><th></th></tr></thead>' +
+        '<table class="items-table" style="margin-top:6px;"><thead><tr><th>样品类别</th><th>检测项目</th><th>采样月份</th><th>个数</th><th>单价(万元)</th><th>年次数</th><th>小计(万元)</th><th></th></tr></thead>' +
         '<tbody id="di-body-' + idx + '"></tbody></table>';
     document.getElementById('wpContainer').appendChild(div);
 }
@@ -351,9 +324,7 @@ function copyWpBlock(srcIdx) {
         items.push({
             sample_type: gf('di_sample_type'),
             detection_project: gf('di_detection_project'),
-            detection_level: gf('di_detection_level'),
-            detection_standard: gf('di_detection_standard'),
-            frequency_type: gf('di_frequency_type'),
+            custom_months: gf('di_custom_months'),
             frequency_value: parseInt(gf('di_frequency_value')) || 1,
             unit_price: parseFloat(gf('di_unit_price')) || null,
             annual_count: parseInt(gf('di_annual_count')) || null,
@@ -395,30 +366,24 @@ function renumberWp() {
     });
 }
 
+var _freqDefaultMonths = { '月': '1,2,3,4,5,6,7,8,9,10,11,12', '季': '3,6,9,12', '半年': '6,12', '年': '6' };
+function getDefaultMonthsStr(ft) { return _freqDefaultMonths[ft] || _freqDefaultMonths['月']; }
+
 function addDiRow(wpIdx, di) {
     var p = di || {};
     var tbody = document.getElementById('di-body-' + wpIdx);
     var tr = document.createElement('tr');
     function v(x) { return (x !== null && x !== undefined) ? x : ''; }
-    var lvlOpts = ['常规','全分析'];
-    var lvlHtml = '<select class="form-control" style="width:70px;" name="di_detection_level"><option value="">--</option>';
-    lvlOpts.forEach(function(o) { lvlHtml += '<option value="' + o + '"' + (p.detection_level === o ? ' selected' : '') + '>' + o + '</option>'; });
-    lvlHtml += '</select>';
-    var ftOpts = ['月','季','半年','年'];
-    var ftHtml = '<select class="form-control" style="width:70px;" name="di_frequency_type">';
-    ftOpts.forEach(function(o) { ftHtml += '<option value="' + o + '"' + (p.frequency_type === o ? ' selected' : '') + '>' + o + '</option>'; });
-    ftHtml += '</select>';
-    var stVal = (p.unit_price && p.annual_count) ? (parseFloat(p.unit_price) * parseInt(p.annual_count)).toFixed(2) : v(p.subtotal);
+    var cmVal = p.custom_months || getDefaultMonthsStr(p.frequency_type || '月');
+    var stVal = (p.unit_price && p.annual_count) ? (parseFloat(p.unit_price) * parseInt(p.annual_count)).toFixed(4) : v(p.subtotal);
     tr.innerHTML =
-        '<td><input class="form-control" style="width:80px;" name="di_sample_type" value="' + esc(v(p.sample_type)) + '"></td>' +
-        '<td><input class="form-control" style="width:100px;" name="di_detection_project" value="' + esc(v(p.detection_project)) + '"></td>' +
-        '<td>' + lvlHtml + '</td>' +
-        '<td><input class="form-control" style="width:100px;" name="di_detection_standard" value="' + esc(v(p.detection_standard)) + '"></td>' +
-        '<td>' + ftHtml + '</td>' +
+        '<td><input class="form-control" style="width:100px;" name="di_sample_type" value="' + esc(v(p.sample_type)) + '"></td>' +
+        '<td><input class="form-control" style="width:120px;" name="di_detection_project" value="' + esc(v(p.detection_project)) + '"></td>' +
+        '<td><input class="form-control" style="width:200px;" name="di_custom_months" value="' + esc(cmVal) + '" placeholder="如:3,6,9,12" title="逗号分隔的月份数字"></td>' +
         '<td><input class="form-control" style="width:50px;" type="number" name="di_frequency_value" value="' + (p.frequency_value || 1) + '"></td>' +
-        '<td><input class="form-control" style="width:70px;" type="number" step="0.01" name="di_unit_price" value="' + v(p.unit_price) + '"></td>' +
+        '<td><input class="form-control" style="width:80px;" type="number" step="0.0001" name="di_unit_price" value="' + v(p.unit_price) + '"></td>' +
         '<td><input class="form-control" style="width:55px;" type="number" name="di_annual_count" value="' + v(p.annual_count) + '"></td>' +
-        '<td><input class="form-control" style="width:80px;" type="number" step="0.01" name="di_subtotal" value="' + v(stVal) + '" readonly style="background:#f0f0f0;"></td>' +
+        '<td><input class="form-control" style="width:80px;" type="number" step="0.0001" name="di_subtotal" value="' + v(stVal) + '" readonly style="background:#f0f0f0;"></td>' +
         '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();syncTotalAmount();">x</button></td>';
     tbody.appendChild(tr);
     var upEl = tr.querySelector('[name="di_unit_price"]');
@@ -426,7 +391,7 @@ function addDiRow(wpIdx, di) {
     function calcSt() {
         var up = parseFloat(upEl.value) || 0;
         var ac = parseInt(acEl.value) || 0;
-        tr.querySelector('[name="di_subtotal"]').value = (up && ac) ? (up * ac).toFixed(2) : '';
+        tr.querySelector('[name="di_subtotal"]').value = (up && ac) ? (up * ac).toFixed(4) : '';
         syncTotalAmount();
     }
     upEl.addEventListener('input', calcSt);
@@ -438,7 +403,7 @@ function syncTotalAmount() {
     document.querySelectorAll('#wpContainer [name="di_subtotal"]').forEach(function(el) {
         total += parseFloat(el.value) || 0;
     });
-    document.getElementById('cm_total_amount').value = total ? total.toFixed(2) : '';
+    document.getElementById('cm_total_amount').value = total ? total.toFixed(4) : '';
 }
 
 function saveContract() {
@@ -462,9 +427,7 @@ function saveContract() {
             wp.detection_items.push({
                 sample_type: gf('di_sample_type') || null,
                 detection_project: gf('di_detection_project') || null,
-                detection_level: gf('di_detection_level') || null,
-                detection_standard: gf('di_detection_standard') || null,
-                frequency_type: gf('di_frequency_type') || null,
+                custom_months: gf('di_custom_months') || null,
                 frequency_value: parseInt(gf('di_frequency_value')) || 1,
                 unit_price: parseFloat(gf('di_unit_price')) || null,
                 annual_count: parseInt(gf('di_annual_count')) || null,
@@ -481,7 +444,6 @@ function saveContract() {
         start_date: document.getElementById('cm_start_date').value || null,
         end_date: document.getElementById('cm_end_date').value || null,
         total_amount: parseFloat(document.getElementById('cm_total_amount').value) || null,
-        full_analysis_months: getFaMonths(),
         notes: document.getElementById('cm_notes').value.trim() || null,
         water_plants: water_plants
     };
@@ -509,7 +471,6 @@ function openEditContract(id) {
         document.getElementById('cm_start_date').value = c.start_date || '';
         document.getElementById('cm_end_date').value = c.end_date || '';
         document.getElementById('cm_notes').value = c.notes || '';
-        setFaMonths(c.full_analysis_months || '6,11');
         document.getElementById('wpContainer').innerHTML = '';
         wpIndex = 0;
         if (c.water_plants && c.water_plants.length) {

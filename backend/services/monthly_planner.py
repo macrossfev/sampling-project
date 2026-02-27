@@ -59,14 +59,11 @@ def generate_monthly_plan(db: Session, year: int, month: int, scheme: str = "bal
                 continue
             if contract.end_date and contract.end_date < target_date:
                 continue
-            # Parse per-contract full-analysis months
-            _raw_fa = getattr(contract, "full_analysis_months", None) or ""
-            _contract_fa = _parse_fa_months(_raw_fa)
             for wp in contract.water_plants:
                 # Collect items that are due this month
                 items_for_wp = []
                 for di in wp.detection_items:
-                    if _is_plannable(di) and _is_due(di, month, _contract_fa):
+                    if _is_plannable(di) and _is_due(di, month):
                         count = di.frequency_value or 1
                         proj = di.detection_project or ""
                         inner = f"{proj}×{count}" if proj else f"×{count}"
@@ -99,19 +96,6 @@ def generate_monthly_plan(db: Session, year: int, month: int, scheme: str = "bal
     }
 
 
-_FULL_ANALYSIS_MONTHS = [6, 11]
-
-
-def _parse_fa_months(raw: str | None) -> list[int]:
-    """Parse comma-separated month string into list of ints.
-    Falls back to _FULL_ANALYSIS_MONTHS on empty/invalid input."""
-    if not raw or not raw.strip():
-        return list(_FULL_ANALYSIS_MONTHS)
-    try:
-        months = [int(m.strip()) for m in raw.split(",") if m.strip()]
-        return sorted(m for m in months if 1 <= m <= 12) or list(_FULL_ANALYSIS_MONTHS)
-    except ValueError:
-        return list(_FULL_ANALYSIS_MONTHS)
 
 
 _SKIP_KEYWORDS = ["采样费", "服务费", "应急", "待定"]
@@ -125,33 +109,31 @@ def _is_plannable(di) -> bool:
     return not any(kw in text for kw in _SKIP_KEYWORDS)
 
 
-def _is_due(di: DetectionItem, month: int, fa_months: list[int] | None = None) -> bool:
-    """Check if a detection item is due in the given month.
-
-    Detection level logic:
-    - 全分析: only due in designated full-analysis months
-    - 常规: due every month EXCEPT full-analysis months (replaced by 全分析)
-    - None/empty: follow normal frequency rules
-
-    fa_months: per-contract full-analysis months; defaults to _FULL_ANALYSIS_MONTHS.
-    """
-    if fa_months is None:
-        fa_months = _FULL_ANALYSIS_MONTHS
-
-    level = getattr(di, "detection_level", None) or ""
-
-    if level == "全分析":
-        return month in fa_months
-    if level == "常规":
-        if month in fa_months:
-            return False
-        return _check_frequency(di, month)
-
+def _is_due(di: DetectionItem, month: int) -> bool:
+    """Check if a detection item is due in the given month."""
     return _check_frequency(di, month)
 
 
+def _parse_custom_months(raw: str | None) -> list[int] | None:
+    """Parse comma-separated custom month string. Returns None if not set."""
+    if not raw or not raw.strip():
+        return None
+    try:
+        months = [int(m.strip()) for m in raw.split(",") if m.strip()]
+        result = sorted(m for m in months if 1 <= m <= 12)
+        return result if result else None
+    except ValueError:
+        return None
+
+
 def _check_frequency(di: DetectionItem, month: int) -> bool:
-    """Check if a detection item is due based on its frequency setting."""
+    """Check if a detection item is due based on its frequency setting.
+    Honors custom_months when set on the item."""
+    # Per-item custom month selection takes priority
+    cm = _parse_custom_months(getattr(di, "custom_months", None))
+    if cm is not None:
+        return month in cm
+
     ft = di.frequency_type
     if not ft or ft == "月":
         return True

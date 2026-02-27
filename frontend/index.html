@@ -249,14 +249,20 @@
                           <el-table :data="plant._items || []" size="small" stripe style="margin-top: 8px;" v-loading="plant._itemsLoading">
                             <el-table-column prop="sample_category" label="样品类别" width="120"></el-table-column>
                             <el-table-column prop="detection_name" label="检测项目" min-width="140"></el-table-column>
-                            <el-table-column prop="detection_standard" label="检测标准" min-width="140"></el-table-column>
-                            <el-table-column prop="frequency_type" label="频率类型" width="100">
-                              <template #default="{ row: item }">{{ freqTypeMap[item.frequency_type] || item.frequency_type }}</template>
+                            <el-table-column label="采样月份" min-width="160">
+                              <template #default="{ row: item }">
+                                <span v-if="item.custom_months">{{ item.custom_months.replace(/,/g, '、') }}月</span>
+                                <span v-else style="color:#909399;">默认</span>
+                              </template>
                             </el-table-column>
-                            <el-table-column prop="frequency_value" label="频率值" width="80" align="center"></el-table-column>
-                            <el-table-column prop="unit_price" label="单价(元)" width="100" align="right"></el-table-column>
+                            <el-table-column prop="frequency_value" label="个数" width="80" align="center"></el-table-column>
+                            <el-table-column prop="unit_price" label="单价(万元)" width="100" align="right">
+                              <template #default="{ row: item }">{{ item.unit_price != null ? Number(item.unit_price).toFixed(4) : '-' }}</template>
+                            </el-table-column>
                             <el-table-column prop="annual_count" label="年检测次数" width="100" align="center"></el-table-column>
-                            <el-table-column prop="subtotal" label="小计(元)" width="100" align="right"></el-table-column>
+                            <el-table-column prop="subtotal" label="小计(万元)" width="100" align="right">
+                              <template #default="{ row: item }">{{ item.subtotal != null ? Number(item.subtotal).toFixed(4) : '-' }}</template>
+                            </el-table-column>
                           </el-table>
                         </div>
                       </div>
@@ -273,7 +279,7 @@
                   <template #default="{ row }">{{ row.start_date || '-' }} ~ {{ row.end_date || '-' }}</template>
                 </el-table-column>
                 <el-table-column prop="total_amount" label="总金额(万元)" width="130" align="right">
-                  <template #default="{ row }">{{ row.total_amount != null ? Number(row.total_amount).toFixed(2) : '-' }}</template>
+                  <template #default="{ row }">{{ row.total_amount != null ? Number(row.total_amount).toFixed(4) : '-' }}</template>
                 </el-table-column>
                 <el-table-column label="操作" width="280" fixed="right">
                   <template #default="{ row }">
@@ -294,7 +300,7 @@
             <el-dialog
               v-model="contract.dialogVisible"
               :title="contract.editingId ? '编辑合同' : '新增合同'"
-              width="860px"
+              width="1100px"
               :close-on-click-modal="false"
               destroy-on-close
             >
@@ -327,7 +333,7 @@
                     <el-date-picker v-model="contract.form.end_date" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" style="width: 100%;"></el-date-picker>
                   </el-form-item>
                   <el-form-item label="总金额(万元)" prop="total_amount">
-                    <el-input-number v-model="contract.form.total_amount" :precision="2" :step="1" :min="0" style="width: 100%;"></el-input-number>
+                    <el-input-number v-model="contract.form.total_amount" :precision="4" :step="1" :min="0" style="width: 100%;"></el-input-number>
                   </el-form-item>
                   <el-form-item label="备注">
                     <el-input v-model="contract.form.remark" type="textarea" :rows="3" placeholder="备注信息"></el-input>
@@ -402,29 +408,21 @@
                           <el-input v-model="row.detection_name" size="small" placeholder="检测项目名"></el-input>
                         </template>
                       </el-table-column>
-                      <el-table-column prop="detection_standard" label="检测标准" min-width="130">
+                      <el-table-column label="采样月份" min-width="220">
                         <template #default="{ row }">
-                          <el-input v-model="row.detection_standard" size="small" placeholder="检测标准"></el-input>
-                        </template>
-                      </el-table-column>
-                      <el-table-column prop="frequency_type" label="频率类型" width="110">
-                        <template #default="{ row }">
-                          <el-select v-model="row.frequency_type" size="small">
-                            <el-option label="月" value="月"></el-option>
-                            <el-option label="季" value="季"></el-option>
-                            <el-option label="半年" value="半年"></el-option>
-                            <el-option label="年" value="年"></el-option>
+                          <el-select v-model="row.custom_months" multiple size="small" placeholder="选择月份" collapse-tags collapse-tags-tooltip style="width:200px;">
+                            <el-option v-for="m in 12" :key="m" :label="m + '月'" :value="m"></el-option>
                           </el-select>
                         </template>
                       </el-table-column>
-                      <el-table-column prop="frequency_value" label="频率值" width="80">
+                      <el-table-column prop="frequency_value" label="个数" width="80">
                         <template #default="{ row }">
                           <el-input-number v-model="row.frequency_value" size="small" :min="1" controls-position="right" style="width:70px;"></el-input-number>
                         </template>
                       </el-table-column>
-                      <el-table-column prop="unit_price" label="单价(元)" width="100">
+                      <el-table-column prop="unit_price" label="单价(万元)" width="110">
                         <template #default="{ row }">
-                          <el-input-number v-model="row.unit_price" size="small" :min="0" :precision="2" controls-position="right" style="width:90px;"></el-input-number>
+                          <el-input-number v-model="row.unit_price" size="small" :min="0" :precision="4" :step="0.01" controls-position="right" style="width:100px;"></el-input-number>
                         </template>
                       </el-table-column>
                       <el-table-column prop="annual_count" label="年检测次数" width="100">
@@ -432,9 +430,9 @@
                           <el-input-number v-model="row.annual_count" size="small" :min="1" controls-position="right" style="width:90px;"></el-input-number>
                         </template>
                       </el-table-column>
-                      <el-table-column label="小计(元)" width="100">
+                      <el-table-column label="小计(万元)" width="110">
                         <template #default="{ row }">
-                          {{ ((row.unit_price || 0) * (row.annual_count || 0)).toFixed(2) }}
+                          {{ ((row.unit_price || 0) * (row.annual_count || 0)).toFixed(4) }}
                         </template>
                       </el-table-column>
                       <el-table-column label="操作" width="60">
@@ -954,13 +952,28 @@
           contract.dialogVisible = true;
         }
 
+        function parseCustomMonths(str, frequencyType) {
+          // Parse "1,4,7,10" into [1,4,7,10]; fall back to defaults if empty
+          if (str && str.trim()) {
+            try {
+              return str.split(',').map(s => parseInt(s.trim())).filter(n => n >= 1 && n <= 12);
+            } catch (e) {}
+          }
+          return getDefaultMonths(frequencyType || '月');
+        }
+
         async function loadContractPlantsForEdit(contractId) {
           try {
             const plantsData = await apiFetch('/api/water-plants?contract_id=' + contractId);
             const plants = Array.isArray(plantsData) ? plantsData : (plantsData.items || plantsData.data || []);
             for (const p of plants) {
               const itemsData = await apiFetch('/api/detection-items?water_plant_id=' + p.id);
-              p.detection_items = Array.isArray(itemsData) ? itemsData : (itemsData.items || itemsData.data || []);
+              const items = Array.isArray(itemsData) ? itemsData : (itemsData.items || itemsData.data || []);
+              // Convert custom_months string to array for UI
+              for (const di of items) {
+                di.custom_months = parseCustomMonths(di.custom_months, di.frequency_type);
+              }
+              p.detection_items = items;
               p.sampling_points = p.sampling_points || [];
               p._inputVisible = false;
               p._inputValue = '';
@@ -1016,6 +1029,20 @@
           plant._inputValue = '';
         }
 
+        function getDefaultMonths(frequencyType) {
+          switch (frequencyType) {
+            case '月': return [1,2,3,4,5,6,7,8,9,10,11,12];
+            case '季': return [3,6,9,12];
+            case '半年': return [6,12];
+            case '年': return [6];
+            default: return [1,2,3,4,5,6,7,8,9,10,11,12];
+          }
+        }
+
+        function onFrequencyTypeChange(row) {
+          row.custom_months = getDefaultMonths(row.frequency_type);
+        }
+
         function addDetectionItem(plantIndex) {
           contract.plants[plantIndex].detection_items.push({
             sample_category: '',
@@ -1024,7 +1051,8 @@
             frequency_type: '月',
             frequency_value: 1,
             unit_price: 0,
-            annual_count: 12
+            annual_count: 12,
+            custom_months: [1,2,3,4,5,6,7,8,9,10,11,12]
           });
         }
 
@@ -1074,6 +1102,9 @@
 
               // Save detection items
               for (const item of plant.detection_items) {
+                const monthsStr = Array.isArray(item.custom_months) && item.custom_months.length > 0
+                  ? item.custom_months.sort((a, b) => a - b).join(',')
+                  : null;
                 const itemPayload = {
                   water_plant_id: plantId,
                   sample_category: item.sample_category,
@@ -1083,7 +1114,8 @@
                   frequency_value: item.frequency_value,
                   unit_price: item.unit_price,
                   annual_count: item.annual_count,
-                  subtotal: (item.unit_price || 0) * (item.annual_count || 0)
+                  subtotal: (item.unit_price || 0) * (item.annual_count || 0),
+                  custom_months: monthsStr
                 };
                 if (item.id) {
                   await apiFetch('/api/detection-items/' + item.id, {
@@ -1201,7 +1233,11 @@
               throw new Error(errMsg);
             }
             const data = await res.json();
-            ElementPlus.ElMessage.success(data.message || '导入成功');
+            ElementPlus.ElMessage({
+              message: data.message || '导入成功，请确认采样月份后点击「生成计划」',
+              type: 'success',
+              duration: 5000
+            });
             contract.importVisible = false;
             contract.importFile = null;
             loadContracts();
@@ -1525,6 +1561,7 @@
           addWizardPlant,
           confirmPlantTag,
           addDetectionItem,
+          onFrequencyTypeChange,
           saveContract,
           deleteContract,
           expandContractDetail,

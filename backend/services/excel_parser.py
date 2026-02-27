@@ -7,7 +7,6 @@ from openpyxl import Workbook, load_workbook
 from sqlalchemy.orm import Session
 
 from backend.models import Contract, WaterPlant, DetectionItem
-from backend.services.plan_generator import generate_annual_plan
 
 
 # Expected header columns (Chinese)
@@ -147,31 +146,30 @@ def import_contract_from_excel(
         total_plants += 1
 
         for item_data in wp_data["items"]:
+            ft = item_data.get("frequency_type")
             di = DetectionItem(
                 water_plant_id=wp.id,
                 sample_type=item_data.get("sample_type"),
                 detection_project=item_data.get("detection_project"),
                 detection_standard=item_data.get("detection_standard"),
-                frequency_type=item_data.get("frequency_type"),
+                frequency_type=ft,
                 frequency_value=item_data.get("frequency_value", 1),
                 unit_price=item_data.get("unit_price"),
                 annual_count=item_data.get("annual_count"),
                 subtotal=item_data.get("subtotal"),
+                custom_months=_default_months_str(ft),
             )
             db.add(di)
             total_items += 1
 
     db.commit()
 
-    # Generate annual plan
-    tasks_count = generate_annual_plan(db, contract.id)
-
     return {
         "contract_id": contract.id,
         "contract_no": contract.contract_no,
         "water_plants_count": total_plants,
         "detection_items_count": total_items,
-        "tasks_generated": tasks_count,
+        "message": f"导入成功，共{total_plants}个水厂、{total_items}条检测项。请在合同中确认采样月份后点击「生成计划」。",
     }
 
 
@@ -181,7 +179,12 @@ def generate_template() -> bytes:
     ws = wb.active
     ws.title = "合同费用表"
 
-    for col_idx, header in enumerate(EXPECTED_HEADERS, start=1):
+    # Display headers with units for the template
+    display_headers = [
+        h.replace("单价", "单价(万元)").replace("小计", "小计(万元)")
+        for h in EXPECTED_HEADERS
+    ]
+    for col_idx, header in enumerate(display_headers, start=1):
         ws.cell(row=1, column=col_idx, value=header)
 
     # Add a sample row
@@ -193,7 +196,7 @@ def generate_template() -> bytes:
         "GB5749常规43项",
         "月",
         1,
-        500,
+        0.05,
         12,
         0.6,
     ]
@@ -204,6 +207,23 @@ def generate_template() -> bytes:
     wb.save(buffer)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+# ---- frequency defaults ----
+
+_FREQ_DEFAULT_MONTHS = {
+    "月": "1,2,3,4,5,6,7,8,9,10,11,12",
+    "季": "3,6,9,12",
+    "半年": "6,12",
+    "年": "6",
+}
+
+
+def _default_months_str(frequency_type: str | None) -> str:
+    """Return default comma-separated months string based on frequency type."""
+    if frequency_type and frequency_type.strip() in _FREQ_DEFAULT_MONTHS:
+        return _FREQ_DEFAULT_MONTHS[frequency_type.strip()]
+    return _FREQ_DEFAULT_MONTHS["月"]
 
 
 # ---- normalization ----

@@ -52,6 +52,7 @@ class DetectionItemCreate(BaseModel):
     annual_count: Optional[int] = None
     subtotal: Optional[float] = None
     detection_level: Optional[str] = None
+    custom_months: Optional[str] = None
 
 
 class DetectionItemResponse(BaseModel):
@@ -68,6 +69,7 @@ class DetectionItemResponse(BaseModel):
     annual_count: Optional[int] = None
     subtotal: Optional[float] = None
     detection_level: Optional[str] = None
+    custom_months: Optional[str] = None
     created_at: Optional[datetime] = None
 
 

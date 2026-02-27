@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 
+from sqlalchemy import inspect, text
 from backend.database import engine, Base
 from backend.routers import (
     companies,
@@ -19,10 +20,21 @@ from backend.routers import (
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
 
 
+def _migrate_add_column(engine, table: str, column: str, col_type: str = "VARCHAR(50)"):
+    """Add a column to an existing table if it doesn't exist (SQLite migration)."""
+    insp = inspect(engine)
+    existing = [c["name"] for c in insp.get_columns(table)]
+    if column not in existing:
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create all tables on startup
     Base.metadata.create_all(bind=engine)
+    # Migrations for existing databases
+    _migrate_add_column(engine, "detection_items", "custom_months", "VARCHAR(50)")
     yield
 
 

@@ -72,6 +72,7 @@ class DetectionItem(Base):
     annual_count = Column(Integer)
     subtotal = Column(Float)
     detection_level = Column(String(20))  # 常规 / 全分析
+    custom_months = Column(String(50), nullable=True)  # 自定义采样月份, e.g. "1,4,7,10"
     created_at = Column(DateTime, default=datetime.now)
 
     water_plant = relationship("WaterPlant", back_populates="detection_items")
